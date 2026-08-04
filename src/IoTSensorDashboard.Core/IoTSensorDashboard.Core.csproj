@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>IoTSensorDashboard.Core</RootNamespace>
+    <AssemblyName>IoTSensorDashboard.Core</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    🔒 이 프로젝트는 PackageReference 도 ProjectReference 도 갖지 않는다. 의존성 0.
+
+    왜: 판정 규칙(불변식 I1~I7)이 여기 있고, 여기가 순수해야 "앱을 띄우지 않고" 검증할 수 있다.
+        판정이 UI 코드비하인드로 새는 순간 자동 검증이 불가능해지고,
+        자동 검증이 없는 판정은 조용히 틀린다.
+
+    WPF · MQTT 라이브러리 · DB 드라이버 어느 것도 여기 들어오면 안 된다.
+    이 파일에 <ItemGroup> 을 추가하고 싶어지면, 그 코드가 정말 Core 에 있어야 하는지 먼저 의심할 것.
+  -->
+
+</Project>

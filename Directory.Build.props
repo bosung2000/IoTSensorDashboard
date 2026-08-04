@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    모든 프로젝트가 공유하는 빌드 규약. 프로젝트가 8개로 늘어도 여기 한 곳만 본다.
+    (TFM 은 프로젝트마다 다르므로 각 csproj 에 둔다.)
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+
+    <!-- 인수 기준이 "오류 0 · 경고 0" 이다. 약속으로 두지 않고 빌드가 강제하게 한다. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!--
+      CS1668 — 빌드 머신의 LIB 환경변수에 존재하지 않는 경로(옛 Visual C++ 잔재)가 들어 있을 때 나온다.
+
+      이건 우리 소스의 문제가 아니라 그 PC 환경의 문제이고, CI 러너에서는 발생하지 않는다.
+      🔒 "거슬리니까 끈다"가 아니라 "우리 코드의 경고가 아님"으로 분류한 것이다 —
+         그래야 남은 경고 0 이 진짜 신호가 된다. 경고를 무디게 만들면 경고가 무의미해진다.
+    -->
+    <NoWarn>$(NoWarn);CS1668</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{617CE415-55A3-480A-8E9C-CD482B035647}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IoTSensorDashboard.Core", "src\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj", "{4DA9F4D3-9F2F-4D1D-8C44-ADE4CF3BE911}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{BA92DFAF-8917-4202-8E4F-A5EC9859EF3B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IoTSensorDashboard.Tests", "tests\IoTSensorDashboard.Tests\IoTSensorDashboard.Tests.csproj", "{CDDB98F9-D096-4F6C-BC2C-6C81D861900A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4DA9F4D3-9F2F-4D1D-8C44-ADE4CF3BE911}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4DA9F4D3-9F2F-4D1D-8C44-ADE4CF3BE911}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4DA9F4D3-9F2F-4D1D-8C44-ADE4CF3BE911}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4DA9F4D3-9F2F-4D1D-8C44-ADE4CF3BE911}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CDDB98F9-D096-4F6C-BC2C-6C81D861900A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CDDB98F9-D096-4F6C-BC2C-6C81D861900A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CDDB98F9-D096-4F6C-BC2C-6C81D861900A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CDDB98F9-D096-4F6C-BC2C-6C81D861900A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4DA9F4D3-9F2F-4D1D-8C44-ADE4CF3BE911} = {617CE415-55A3-480A-8E9C-CD482B035647}
+		{CDDB98F9-D096-4F6C-BC2C-6C81D861900A} = {BA92DFAF-8917-4202-8E4F-A5EC9859EF3B}
+	EndGlobalSection
+EndGlobal

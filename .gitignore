@@ -1,0 +1,46 @@
+## 빌드 산출물
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Ll]og/
+[Ll]ogs/
+
+## 🔴 옛 TFM 폴더가 섞여 "수정이 안 먹은 것처럼" 보이는 사고가 있었다.
+## bin 을 통째로 무시하는 것은 그 사고의 예방이기도 하다.
+
+## Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## 테스트 · 커버리지
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+
+## NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+
+## OS
+[Tt]humbs.db
+[Dd]esktop.ini
+.DS_Store
+
+## 로컬 런타임 데이터 (앱은 %LOCALAPPDATA% 에 쓰지만, 실수로 리포에 생기는 것 차단)
+*.db
+*.db-shm
+*.db-wal
+escalations.log

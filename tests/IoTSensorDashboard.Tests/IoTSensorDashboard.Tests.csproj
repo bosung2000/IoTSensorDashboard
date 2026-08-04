@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>IoTSensorDashboard.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!--
+    🔒 테스트는 UI 앱 프로젝트를 참조하지 않는다 — 판정을 소유한 층만 본다.
+       그래서 이 프로젝트는 net8.0(윈도우 비의존)이고 헤드리스로 돈다.
+
+       대신 XAML 파싱 오류·리소스 누락처럼 "앱을 띄워야만 드러나는" 결함은 여기서 안 잡힌다.
+       그건 별도의 기동 스모크가 맡는다 — 할 수 있는 것만 주장한다.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj" />
+  </ItemGroup>
+
+</Project>
