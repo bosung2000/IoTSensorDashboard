@@ -60,6 +60,20 @@ public sealed class ServerHost : IAsyncDisposable
     private readonly PipelineMetrics _metrics = new();
     private readonly CodecRegistry _codecs = new(new FlirCodec(), new MilesightCodec());
     private readonly SensorHealthTracker _health = new();
+
+    /// <summary>
+    /// <b>데이터만</b> 보고 판정하는 추적기 — 핑 응답은 넣지 않는다.
+    ///
+    /// 🔑 <b>왜 두 벌인가</b>: 「응답한다」와 「데이터를 보낸다」는 다른 사실이고,
+    ///    화면은 그 둘을 <b>나란히</b> 보여줘야 한다.
+    ///    한 벌만 두고 핑까지 섞으면 발신이 멈춰도 100% 가 나와,
+    ///    <b>데이터가 0 건인데 화면이 완벽해 보이는</b> 상태가 된다(실측으로 재현했다).
+    ///
+    /// 📌 덤: 이 값은 종합상황판이 제 눈으로 세는 값과 <b>같아야 한다</b>
+    ///    (둘 다 같은 브로커의 데이터만 보므로). 두 화면이 어긋나면 그 자체가 신호다.
+    /// </summary>
+    private readonly SensorHealthTracker _dataHealth = new();
+
     private readonly SiteProvisioning _provisioning = new();
 
     private readonly CancellationTokenSource _cts = new();
@@ -89,6 +103,9 @@ public sealed class ServerHost : IAsyncDisposable
         //    빼먹으면 처음부터 죽어 있던 센서가 분모에서 통째로 빠져
         //    950/950 = 100% 가 된다.
         _health.Expect(_provisioning.SensorIds);
+
+        // 🔑 분모는 두 추적기가 **같아야** 한다. 명부가 곧 분모이므로 같은 것을 등록한다.
+        _dataHealth.Expect(_provisioning.SensorIds);
     }
 
     // ── 화면이 읽는 값들 ─────────────────────────────────────────────────
@@ -124,7 +141,11 @@ public sealed class ServerHost : IAsyncDisposable
     /// <summary>수집 채널이 실제로 붙어 있는가.</summary>
     public bool IngestConnected => _ingest?.IsConnected ?? false;
 
+    /// <summary>응답 기준(데이터 + 핑 ACK) — 「이 센서가 살아 있는가」.</summary>
     public SensorHealthTracker Health => _health;
+
+    /// <summary>데이터 기준 — 「이 센서가 실제로 보내고 있는가」.</summary>
+    public SensorHealthTracker DataHealth => _dataHealth;
 
     public SiteProvisioning Provisioning => _provisioning;
 
@@ -360,6 +381,10 @@ public sealed class ServerHost : IAsyncDisposable
 
             // 🔑 헬스는 **도착 시각** 기준이다. 처리 시각이 아니다.
             _health.Observe(e.SensorId, raw.ReceivedAt);
+
+            // 🔒 데이터 추적기는 **여기서만** 갱신된다 — 핑 ACK 경로에서는 건드리지 않는다.
+            //    그 구분이 이 추적기의 존재 이유다.
+            _dataHealth.Observe(e.SensorId, raw.ReceivedAt);
         }
     }
 

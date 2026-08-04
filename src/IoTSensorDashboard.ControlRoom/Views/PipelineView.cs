@@ -60,50 +60,56 @@ public sealed class PipelineView : RenderPanel
     /// </summary>
     private void DrawUptime(DrawingContext dc, Rect area, PipelineSnapshot s)
     {
-        double cx = area.X + area.Width / 2;
+        // 🔑 <b>두 비율을 나란히</b> 놓는다. 문장으로 「응답은 오는데 데이터가 없다」라고
+        //    쓰는 것보다, 100.00% 옆에 0.00% 가 붙어 있는 편이 훨씬 빨리 읽힌다.
+        //    차이 자체가 곧 「살아 있지만 안 보내는 센서 수」다.
+        double half = area.Width / 2;
 
-        var color = s.Uptime switch
+        DrawRatio(dc, new Rect(area.X, area.Y, half - 12, area.Height),
+            "센서 응답률", "응답 (핑 포함)", s.Uptime, s.SensorsOnline, s.SensorsTotal,
+            HealthTone(s.Uptime));
+
+        // 데이터 쪽은 「몇 %가 실제로 보내고 있나」다. 응답률과 달리
+        // 낮다고 곧 장애는 아니다(느린 센서는 원래 뜸하다) — 그래서 색을 달리 쓴다.
+        DrawRatio(dc, new Rect(area.X + half + 12, area.Y, half - 12, area.Height),
+            "데이터 수신율", "실제 발신 중", s.DataRate, s.SensorsSending, s.SensorsTotal,
+            s.DataFlowing ? HudPalette.Accent : HudPalette.Warn);
+    }
+
+    private static Brush HealthTone(double? ratio) => ratio switch
+    {
+        null => HudPalette.Unknown,
+        >= 0.999 => HudPalette.In,
+        >= 0.95 => HudPalette.Warn,
+        _ => HudPalette.Down
+    };
+
+    /// <summary>비율 한 칸 — 제목 · 큰 숫자 · N/M.</summary>
+    private void DrawRatio(
+        DrawingContext dc, Rect box, string title, string caption,
+        double? ratio, int value, int total, Brush color)
+    {
+        double right = box.Right;
+
+        HudDraw.Text(dc, title, right, box.Y + 2, 12, HudPalette.TextMuted, Ppd,
+            HudDraw.Weight.Semi, HudDraw.Align.Right, box.Width);
+
+        if (ratio is double r)
         {
-            null => HudPalette.Unknown,
-            >= 0.999 => HudPalette.In,
-            >= 0.95 => HudPalette.Warn,
-            _ => HudPalette.Down
-        };
-
-        HudDraw.Text(dc, "센서 응답률", cx - 96, area.Y + 14, 12.5, HudPalette.TextMuted, Ppd,
-            HudDraw.Weight.Semi, HudDraw.Align.Right);
-
-        if (s.Uptime is double u)
-        {
-            HudDraw.TextFit(dc, (u * 100).ToString("F2", CultureInfo.CurrentCulture) + "%",
-                cx - 86, area.Y, 34, 16, area.Width * 0.42, color, Ppd, HudDraw.Weight.Heavy);
+            HudDraw.TextFit(dc, (r * 100).ToString("F2", CultureInfo.CurrentCulture) + "%",
+                right, box.Y + 16, 30, 14, box.Width, color, Ppd,
+                HudDraw.Weight.Heavy, HudDraw.Align.Right);
         }
         else
         {
-            HudDraw.TextFit(dc, "측정 불가", cx - 86, area.Y + 6, 24, 12, area.Width * 0.42,
-                HudPalette.Unknown, Ppd, HudDraw.Weight.Heavy);
+            // 🔴 분모가 0 이면 「측정 불가」다. 100% 도 0% 도 아니다.
+            HudDraw.TextFit(dc, "측정 불가", right, box.Y + 20, 22, 12, box.Width,
+                HudPalette.Unknown, Ppd, HudDraw.Weight.Heavy, HudDraw.Align.Right);
         }
 
         // 🔑 N/M 을 같이 — 분모를 모르는 비율은 믿을 근거가 없다.
-        HudDraw.Text(dc, $"{s.SensorsOnline:N0} / {s.SensorsTotal:N0} 응답",
-            cx - 86, area.Y + 40, 11, HudPalette.TextDim, Ppd);
-
-        // 🔴 응답률만으로는 「데이터가 들어오는가」를 알 수 없다.
-        //    센서가 전부 응답해도 발신이 멈춰 있으면 이 화면은 온통 초록이 된다.
-        //    그 상태를 여기서 깨뜨린다 — 초록불만 있는 화면이 최약점을 감춘다.
-        if (!s.DataFlowing)
-        {
-            // 🔒 오른쪽 끝에 붙인다. 가운데 큰 숫자는 폭이 값에 따라 변하므로
-            //    그 옆에 상대 좌표로 두면 **글자가 겹친다**(실제로 겹쳤다).
-            //    경계가 고정된 쪽에 정렬하는 것이 안전하다.
-            double limit = area.Width * 0.42;
-
-            HudDraw.Text(dc, "⚠ 응답은 오지만 데이터 수신 없음", area.Right, area.Y + 14, 12,
-                HudPalette.Warn, Ppd, HudDraw.Weight.Semi, HudDraw.Align.Right, limit);
-
-            HudDraw.Text(dc, "센서는 살아 있고 발신이 멈춘 상태", area.Right, area.Y + 32, 10,
-                HudPalette.TextDim, Ppd, align: HudDraw.Align.Right, maxWidth: limit);
-        }
+        HudDraw.Text(dc, $"{value:N0} / {total:N0} · {caption}", right, box.Y + 48, 10.5,
+            HudPalette.TextDim, Ppd, align: HudDraw.Align.Right, maxWidth: box.Width);
     }
 
     /// <summary>센서 다발 → 노드 4개.</summary>

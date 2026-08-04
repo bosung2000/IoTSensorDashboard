@@ -247,6 +247,9 @@ public partial class MainWindow : Window
 
         var (online, _, total) = _host.Health.Summary(DateTimeOffset.UtcNow, HealthPolicy.Offline);
 
+        // 🔑 같은 정책·같은 순간으로 잰다. 기준이 다르면 두 숫자를 나란히 놓을 수 없다.
+        var (sending, _, _) = _host.DataHealth.Summary(DateTimeOffset.UtcNow, HealthPolicy.Offline);
+
         var snapshot = new PipelineSnapshot
         {
             TakenAt = now,
@@ -254,6 +257,7 @@ public partial class MainWindow : Window
             IngestConnected = _host.IngestConnected,
             SensorsOnline = online,
             SensorsTotal = total,
+            SensorsSending = sending,
             DataFlowing = DataFlowing(now),
             Backlog = _host.Backlog,
             Workers = _host.WorkerCount,

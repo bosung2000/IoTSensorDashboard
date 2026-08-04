@@ -27,6 +27,18 @@ public sealed record PipelineSnapshot
     public double? Uptime => SensorsTotal > 0 ? (double)SensorsOnline / SensorsTotal : null;
 
     /// <summary>
+    /// <b>데이터를 보내고 있는</b> 센서 수 — 핑 응답만 하는 센서는 빠진다.
+    ///
+    /// 🔑 <see cref="SensorsOnline"/> 과 <b>나란히 놓으라고</b> 있는 값이다.
+    ///    두 숫자의 차이가 곧 「살아 있지만 안 보내는 센서」다.
+    ///    문장으로 설명하는 것보다 숫자 두 개를 붙여 놓는 편이 빨리 읽힌다.
+    /// </summary>
+    public required int SensorsSending { get; init; }
+
+    /// <summary>데이터 기준 비율. 분모가 0 이면 null(측정 불가).</summary>
+    public double? DataRate => SensorsTotal > 0 ? (double)SensorsSending / SensorsTotal : null;
+
+    /// <summary>
     /// 최근에 <b>실제 데이터</b>가 들어오고 있는가.
     ///
     /// 🔴 <b>이 값이 없으면 화면이 거짓말을 한다 — 실측으로 재현했다.</b>
@@ -110,6 +122,7 @@ public sealed record PipelineSnapshot
         IngestConnected = false,
         SensorsOnline = 0,
         SensorsTotal = 0,
+        SensorsSending = 0,
         DataFlowing = false,
         Backlog = 0,
         Workers = 0,
