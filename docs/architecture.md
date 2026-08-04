@@ -159,7 +159,7 @@ WPF 도, MQTT 라이브러리도, DB 드라이버도 안 들어온다. 외부 �
 
 ---
 
-## 4. 지금까지 만든 것 — Core 층
+## 4. 지금까지 만든 것 — Core · Sqlite
 
 ```
 S:\IoTSensorDashboard\
@@ -168,17 +168,25 @@ S:\IoTSensorDashboard\
 ├── 📄 Directory.Build.props    모든 프로젝트 공통 규약
 ├── 📄 IoTSensorDashboard.sln   프로젝트 묶음 목록
 │
-├── 📁 src\IoTSensorDashboard.Core\        ← 규칙을 소유한 층
-│   ├── Domain\        "무엇이 존재하는가"     CountEvent · Site · Sensor · Role
-│   ├── Ingestion\     "받아들일 것인가"       파이프라인 · 판정 · 지표
+├── 📁 src\IoTSensorDashboard.Core\        ← 규칙을 소유한 층 (의존성 0)
+│   ├── Domain\        "무엇이 존재하는가"      CountEvent · Site · Sensor · Role
+│   ├── Ingestion\     "받아들일 것인가"        파이프라인 · 판정 · 지표
 │   ├── Codecs\        "이 바이트가 무슨 뜻인가" FLIR · Milesight 해석기
-│   ├── Storage\       "어떻게 보관하는가"      저장 계약 · 인메모리 구현
+│   ├── Storage\       "어떻게 보관하는가"      저장 계약 · 보존 정책 · 인메모리
+│   ├── Audit\         "누가 무엇을 봤는가"     감사 계약
 │   └── Simulation\    "무엇을 내보낼 것인가"   발행 페이로드 생성
+│
+├── 📁 src\IoTSensorDashboard.Sqlite\      ← 실제로 파일에 쓰는 층
+│   ├── SqliteSchema.cs        테이블 4개 · 연결 설정(PRAGMA)
+│   ├── SqliteEventStore.cs    이벤트 · 롤업/프룬 · 공간 회수 · SQL 집계
+│   ├── SqliteOutageLog.cs     장애 이력
+│   └── SqliteAuditLog.cs      감사 로그
 │
 └── 📁 tests\IoTSensorDashboard.Tests\     ← 규칙이 깨졌는지 감시
     ├── InvariantGates\  절대 깨지면 안 되는 것
     ├── Ingestion\       판정이 일관적인가
-    └── Codecs\          이기종을 제대로 흡수하는가
+    ├── Codecs\          이기종을 제대로 흡수하는가
+    └── Storage\         영속 저장이 계약대로인가
 ```
 
 ### 폴더별로 무슨 일을 하나
@@ -188,8 +196,23 @@ S:\IoTSensorDashboard\
 | **Domain** | 이 세계에 무엇이 존재하는지 정의 | `CountEvent` — 센서가 센 한 순간 |
 | **Ingestion** | 들어온 걸 받아들일지 판정 | `IngestionPipeline` — 이 층의 심장 |
 | **Codecs** | 벤더마다 다른 형식을 표준으로 번역 | `FlirCodec` · `MilesightCodec` |
-| **Storage** | 어떻게 보관할지의 **약속** | `IEventStore` — 구현이 아니라 계약 |
+| **Storage**(Core) | 어떻게 보관할지의 **약속**과 **정책** | `IEventStore` · `RetentionPolicy` |
 | **Simulation** | 발행할 메시지 형식의 단일 소스 | `VendorPayloadFactory` |
+| **Sqlite** | 그 약속의 **실제 구현** | `SqliteEventStore` |
+
+### 🔑 Core 의 `Storage` 와 Sqlite 프로젝트가 나뉜 이유
+
+```
+Core/Storage/     "무엇을 보장하는가"  → IEventStore(수정 표면 없음) · RetentionPolicy(언제 정리할지)
+Sqlite/           "어떻게 해내는가"    → INSERT OR IGNORE · 트랜잭션 · PRAGMA · SQL
+```
+
+**"3시간 지나면 정리한다"는 규칙**은 SQLite 와 무관하다. PostgreSQL 로 바꿔도 그대로다.
+그래서 정책은 Core 에 있고, **DB 를 안 띄우고도 검증**할 수 있다.
+
+반대로 `INSERT OR IGNORE` 같은 건 SQLite 고유의 방법이라 Sqlite 프로젝트에 있다.
+
+> 📌 판별법: **"DB 를 바꿔도 그대로인가?"** → 그렇다면 Core 로.
 
 ---
 
@@ -351,17 +374,18 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    L1["✅ 1층 · Core<br/>판정 규칙"] --> L2["2층 · SQLite<br/>영속 저장"]
+    L1["✅ 1층 · Core<br/>판정 규칙"] --> L2["✅ 2층 · Sqlite<br/>영속 저장"]
     L2 --> L3["3층 · MQTT<br/>브로커 · 센서 팜"]
     L3 --> L4["4층 · 판정 확장<br/>헬스 · 권한 · 알림 · SLA"]
     L4 --> L5["5층 · WPF<br/>화면 3개"]
 
     style L1 fill:#0d3320,stroke:#2ea043,color:#e6edf3
+    style L2 fill:#0d3320,stroke:#2ea043,color:#e6edf3
 ```
 
-| 층 | 무엇 | 새로 배우는 도구 |
+| 층 | 무엇 | 새로 쓰는 도구 |
 |---|---|---|
-| **2층** | 파일에 저장 · 오래된 건 집계로 접기 · 디스크 공간 회수 | SQLite · 트랜잭션 · WAL |
+| ~~2층~~ | ~~파일에 저장 · 오래된 건 집계로 접기 · 공간 회수~~ | SQLite · 트랜잭션 · WAL |
 | **3층** | 진짜 메시지를 주고받기 · 끊겨도 다시 붙기 | MQTTnet · TLS · 비동기 |
 | **4층** | 센서가 죽었는지 판정 · 누가 뭘 볼 수 있는지 · 언제 누구에게 알릴지 | (순수 로직) |
 | **5층** | 화면 · 직접 그리기 · 60fps 를 쓰지 않는 법 | WPF · `OnRender` |
