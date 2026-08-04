@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>IoTSensorDashboard.SensorFarm</RootNamespace>
+    <AssemblyName>IoTSensorDashboard.SensorFarm</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    🔑 이 앱은 「테스트 도구」가 아니라 납품물이다.
+       실제 센서 없이 이 시스템의 신뢰성을 증명하는 유일한 수단이고,
+       인수 검증도 이 앱으로 악조건을 의도적으로 재현해서 한다.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj" />
+    <ProjectReference Include="..\IoTSensorDashboard.Mqtt\IoTSensorDashboard.Mqtt.csproj" />
+    <ProjectReference Include="..\IoTSensorDashboard.Ui.Common\IoTSensorDashboard.Ui.Common.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,11 @@
+<Application x:Class="IoTSensorDashboard.ControlRoom.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <!--
+        🔴 x:Class 가 빠지면 App 클래스가 통째로 죽는다.
+           실제로 그런 적이 있고, 그때 테스트는 전부 그린이었다.
+           앱을 띄워야만 드러나는 부류라 기동 스모크가 따로 필요한 이유다.
+    -->
+    <Application.Resources />
+</Application>

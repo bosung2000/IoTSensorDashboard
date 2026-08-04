@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>IoTSensorDashboard.Dashboard</RootNamespace>
+    <AssemblyName>IoTSensorDashboard.Dashboard</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    이 앱은 소비자다. 브로커를 구독해 자체 읽기 모델을 만들고 권한 범위에 맞게 표시한다.
+    원본 보관자가 아니므로 상한이 있는 인메모리 저장소를 쓴다.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj" />
+    <ProjectReference Include="..\IoTSensorDashboard.Mqtt\IoTSensorDashboard.Mqtt.csproj" />
+    <ProjectReference Include="..\IoTSensorDashboard.Sqlite\IoTSensorDashboard.Sqlite.csproj" />
+    <ProjectReference Include="..\IoTSensorDashboard.Ui.Common\IoTSensorDashboard.Ui.Common.csproj" />
+  </ItemGroup>
+
+</Project>

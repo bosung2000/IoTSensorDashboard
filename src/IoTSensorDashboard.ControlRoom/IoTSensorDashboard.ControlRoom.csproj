@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>IoTSensorDashboard.ControlRoom</RootNamespace>
+    <AssemblyName>IoTSensorDashboard.ControlRoom</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    ⚠️ 이 앱이 브로커를 소유한다. 따라서 가장 먼저 떠야 하고,
+       이 앱이 죽으면 나머지 둘은 붙을 곳이 없다.
+       (클라이언트가 무한 재시도하므로 돌아오면 자동 복구된다.)
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj" />
+    <ProjectReference Include="..\IoTSensorDashboard.Mqtt\IoTSensorDashboard.Mqtt.csproj" />
+    <ProjectReference Include="..\IoTSensorDashboard.Sqlite\IoTSensorDashboard.Sqlite.csproj" />
+    <ProjectReference Include="..\IoTSensorDashboard.Ui.Common\IoTSensorDashboard.Ui.Common.csproj" />
+  </ItemGroup>
+
+</Project>
