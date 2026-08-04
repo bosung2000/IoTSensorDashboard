@@ -22,10 +22,14 @@ namespace IoTSensorDashboard.SensorFarm;
 /// </summary>
 public sealed class SensorFarmView : FrameworkElement
 {
-    private const double Tile = 18;
     private const double Gap = 3;
-    private const double Step = Tile + Gap;
     private const double Radius = 3;
+
+    /// <summary>타일이 이보다 작아지면 클릭도 어렵고 색도 못 읽는다.</summary>
+    private const double MinTile = 4;
+
+    /// <summary>이보다 크면 「센서 다발」이 아니라 「버튼 몇 개」로 보인다.</summary>
+    private const double MaxTile = 26;
 
     /// <summary>발행 후 밝게 보일 프레임 수.</summary>
     private const int PulseFrames = 4;
@@ -43,6 +47,16 @@ public sealed class SensorFarmView : FrameworkElement
 
     private int[] _pulseUntilFrame = [];
     private int _frame;
+
+    /// <summary>
+    /// 마지막으로 그릴 때 쓴 격자 크기.
+    ///
+    /// 🔑 <b>클릭 판정이 이 값을 그대로 써야 한다.</b> 그리기와 클릭이 서로 다른 계산을 하면
+    ///    보이는 타일과 눌리는 타일이 어긋난다 — 「엉뚱한 센서가 죽는」 버그가 그렇게 난다.
+    /// </summary>
+    private double _step;
+
+    private int _perRow = 1;
 
     public SensorFarmView()
     {
@@ -86,18 +100,60 @@ public sealed class SensorFarmView : FrameworkElement
         // 🔑 락 한 번. 이 뒤로는 엔진을 건드리지 않는다.
         _engine.CopyOnlineStates(_online);
 
-        int perRow = Math.Max(1, (int)((ActualWidth + Gap) / Step));
-        int visibleRows = (int)(ActualHeight / Step) + 1;
-        int maxTiles = Math.Min(_online.Length, perRow * visibleRows);
+        Layout(_online.Length);
 
-        for (int i = 0; i < maxTiles; i++)
+        double tile = _step - Gap;
+        if (tile < 1) return;
+
+        double radius = Math.Min(Radius, tile / 3);
+
+        for (int i = 0; i < _online.Length; i++)
         {
-            double x = (i % perRow) * Step;
-            double y = (i / perRow) * Step;
+            double x = (i % _perRow) * _step;
+            double y = (i / _perRow) * _step;
             if (y > ActualHeight) break;
 
-            dc.DrawRoundedRectangle(BrushFor(i), null, new Rect(x, y, Tile, Tile), Radius, Radius);
+            dc.DrawRoundedRectangle(BrushFor(i), null, new Rect(x, y, tile, tile), radius, radius);
         }
+    }
+
+    /// <summary>
+    /// 센서 전부가 <b>영역 안에 들어가는</b> 가장 큰 격자를 고른다.
+    ///
+    /// 🔴 <b>고정 크기를 쓰면 안 되는 이유</b>: 타일을 18px 로 박아 두었더니
+    ///    창이 커져도 격자는 그대로라 <b>아래 4분의 1이 빈 채</b>로 남았다.
+    ///    반대로 창을 줄이면 뒤쪽 센서가 <b>말없이 화면 밖으로</b> 밀려났다 —
+    ///    「안 보이는 센서」는 죽어도 아무도 모른다. 1,000대가 <b>전부 보이는 것</b>이 이 화면의 요건이다.
+    ///
+    /// 📌 큰 쪽부터 훑어 첫 번째로 들어맞는 값을 쓴다. 후보가 40단계뿐이라
+    ///    이분 탐색을 쓸 이유가 없고, 위에서 내려오므로 <b>항상 가능한 가장 큰 타일</b>이 나온다.
+    /// </summary>
+    private void Layout(int count)
+    {
+        if (count <= 0)
+        {
+            _step = MinTile + Gap;
+            _perRow = 1;
+            return;
+        }
+
+        for (double tile = MaxTile; tile >= MinTile; tile -= 0.5)
+        {
+            double step = tile + Gap;
+
+            int perRow = Math.Max(1, (int)((ActualWidth + Gap) / step));
+            int rows = (int)Math.Ceiling((double)count / perRow);
+
+            if (rows * step - Gap > ActualHeight) continue;
+
+            _step = step;
+            _perRow = perRow;
+            return;
+        }
+
+        // 하한에서도 안 들어가면 하한으로 그린다 — 잘려도 「가능한 만큼」은 보여준다.
+        _step = MinTile + Gap;
+        _perRow = Math.Max(1, (int)((ActualWidth + Gap) / _step));
     }
 
     /// <summary>
@@ -121,20 +177,22 @@ public sealed class SensorFarmView : FrameworkElement
     {
         ArgumentNullException.ThrowIfNull(e);
 
-        if (_engine is not null)
+        // 🔒 그릴 때 쓴 격자(_step·_perRow)를 그대로 쓴다. 여기서 다시 계산하면
+        //    보이는 타일과 눌리는 타일이 어긋나 엉뚱한 센서가 죽는다.
+        if (_engine is not null && _step > Gap)
         {
             var point = e.GetPosition(this);
-            int perRow = Math.Max(1, (int)((ActualWidth + Gap) / Step));
+            double tile = _step - Gap;
 
-            int column = (int)(point.X / Step);
-            int row = (int)(point.Y / Step);
+            int column = (int)(point.X / _step);
+            int row = (int)(point.Y / _step);
 
             // 타일 사이 간격을 클릭한 경우는 무시한다 — 엉뚱한 센서가 죽으면 혼란스럽다.
-            bool insideTile = point.X - column * Step <= Tile && point.Y - row * Step <= Tile;
+            bool insideTile = point.X - column * _step <= tile && point.Y - row * _step <= tile;
 
-            if (insideTile && column < perRow)
+            if (insideTile && column < _perRow)
             {
-                int index = row * perRow + column;
+                int index = row * _perRow + column;
                 if (index >= 0 && index < _engine.SensorCount) TileClicked?.Invoke(index);
             }
         }
