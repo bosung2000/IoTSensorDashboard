@@ -26,10 +26,19 @@ public sealed record PipelineSnapshot
     public required int Workers { get; init; }
     public required int MaxWorkers { get; init; }
 
-    /// <summary>초당 수신 — <b>실제 경과 시간</b>으로 나눈 값이어야 한다.</summary>
+    /// <summary>
+    /// 초당 수신 — <b>메시지</b> 단위다(센서 팜의 발신 레이트와 같은 단위).
+    ///
+    /// 🔑 이벤트가 아니라 메시지인 이유: 이 값은 팜 화면과 <b>나란히 비교</b>하라고 있는 것이다.
+    ///    단위가 다르면 정상인데도 2배 차이가 나서 유실·중복으로 읽힌다.
+    /// </summary>
     public required double ReceiveRate { get; init; }
 
-    /// <summary>초당 저장. 수신과 벌어지면 그 차이가 곧 병목의 크기다.</summary>
+    /// <summary>
+    /// 초당 저장 — <b>이벤트</b> 단위다(한 메시지가 in·out 두 건을 낳는다).
+    ///
+    /// ⚠️ <see cref="ReceiveRate"/> 와 <b>단위가 다르다</b>. 나란히 놓고 빼지 말 것.
+    /// </summary>
     public required double StoreRate { get; init; }
 
     public required double AvgLatencyMicros { get; init; }

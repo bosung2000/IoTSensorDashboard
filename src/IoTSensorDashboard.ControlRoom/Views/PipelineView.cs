@@ -108,7 +108,8 @@ public sealed class PipelineView : RenderPanel
             //    단위가 다른 수를 흐름에 나란히 놓느니 **비워 두는 편**이 정직하다.
             ("집계", "시간 버킷 (I3)", "", HudPalette.Accent),
 
-            ("대시보드", "실시간 카운트", RateText.Format(s.StoreRate) + "/s", HudPalette.In),
+            // 단위를 부제에 적는다 — 위 카드의 「수신」은 메시지, 여기는 이벤트다.
+            ("대시보드", "실시간 · 이벤트/s", RateText.Format(s.StoreRate), HudPalette.In),
         ];
 
         double left = funnel.X + 26;

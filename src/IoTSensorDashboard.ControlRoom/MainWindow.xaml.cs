@@ -63,7 +63,7 @@ public partial class MainWindow : Window
     private readonly Queue<double> _activity = new();
     private readonly Queue<FeedLine> _feed = new();
 
-    private MetricsSnapshot _previous;
+    private long _previousMessages;
     private long _previousStored;
     private bool _rateBaselineSet;
     private double _receiveRate;
@@ -129,7 +129,7 @@ public partial class MainWindow : Window
 
         // 🔑 레이트는 **화면 갱신과 다른 주기**로 잰다(RateWindowSeconds).
         //    여기서 매 틱 재면 창이 발행 묶음보다 짧아져 숫자가 널뛴다.
-        SampleRates(now);
+        SampleRates();
 
         RxValue.Text = ((long)_receiveRate).ToString("N0", CultureInfo.CurrentCulture);
         WorkerValue.Text = _host.WorkerCount.ToString(CultureInfo.CurrentCulture);
@@ -172,7 +172,7 @@ public partial class MainWindow : Window
     ///    타이머는 best-effort 라 부하가 커지면 밀리고, 밀린 만큼 델타가 커지는데
     ///    라벨은 그대로여서 바쁠수록 과대 표시된다(과거 8배 부풀린 적이 있다).
     /// </summary>
-    private void SampleRates(MetricsSnapshot metrics)
+    private void SampleRates()
     {
         double elapsed = _sinceRate.Elapsed.TotalSeconds;
         if (elapsed < RateWindowSeconds) return;
@@ -187,15 +187,25 @@ public partial class MainWindow : Window
         if (!_rateBaselineSet)
         {
             _rateBaselineSet = true;
-            _previous = metrics;
+            _previousMessages = _host.MessagesReceived;
             _previousStored = _host.TotalStored;
             return;
         }
 
-        // 수신 — metrics.Received 는 **이벤트** 수다(메시지가 아니라).
-        //        한 메시지에 in·out 두 이벤트가 들어 있어 발행 레이트의 2배가 된다.
-        double instant = Math.Max(0, metrics.Received - _previous.Received) / elapsed;
-        _previous = metrics;
+        // 🔑 수신은 **메시지** 수로 센다 — 센서 팜이 「발신 500/s」라 말할 때의 그 단위다.
+        //
+        // 📌 왜 이벤트가 아니라 메시지인가: 이 카드는 밖에서 들어온 양을 말한다.
+        //    이벤트로 세면 한 메시지의 in·out 이 2로 잡혀 팜의 500 이 여기서 1,000 이 되고,
+        //    보는 사람은 그 2배가 **중복이나 유실**인 줄 안다. 두 화면을 나란히 놓고
+        //    비교하는 게 이 숫자의 용도이므로, 비교되는 쪽과 단위를 맞춘다.
+        //
+        // 🔴 「이벤트 ÷ 2」로 환산하지 않는다. 라인 수가 항상 2라는 보장이 없다 —
+        //    코덱은 lines 배열을 순회하고, out 만 깨진 payload 는 in 하나만 낸다.
+        //    그때 ÷2 는 0.5 라는 있지도 않은 값을 만든다.
+        //    세지 않은 것을 나눗셈으로 지어내지 말고, **실제로 센 카운터**를 쓴다.
+        long messages = _host.MessagesReceived;
+        double instant = Math.Max(0, messages - _previousMessages) / elapsed;
+        _previousMessages = messages;
 
         _receiveSamples.Enqueue(instant);
         while (_receiveSamples.Count > RateSamples) _receiveSamples.Dequeue();
@@ -283,8 +293,11 @@ public partial class MainWindow : Window
 
         if (now - _lastFeedAt < HeartbeatLine) return;
 
+        // 단위를 적되 **짧게** — 피드 폭은 좁고, 넘치면 말줄임에 잘려 뒤가 안 보인다.
+        // 화살표가 「들어와서 나간다」는 방향까지 같이 말해 준다.
+        // (수신은 메시지, 저장은 이벤트다. 안 적으면 500 → 1,000 이 유실·중복으로 읽힌다.)
         Push(now, FeedLevel.Normal,
-            $"정상 처리 · 수신 {receiveRate:N0}/s · 저장 {_storeRate:N0}/s");
+            $"정상 · {receiveRate:N0} msg/s → {_storeRate:N0} evt/s");
     }
 
     private void Push(DateTimeOffset at, FeedLevel level, string message)

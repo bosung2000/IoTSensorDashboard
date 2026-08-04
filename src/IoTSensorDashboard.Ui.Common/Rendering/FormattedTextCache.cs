@@ -77,7 +77,22 @@ public static class FormattedTextCache
             brush,
             ppd);
 
-        if (maxWidth > 0) created.MaxTextWidth = maxWidth;
+        if (maxWidth > 0)
+        {
+            created.MaxTextWidth = maxWidth;
+
+            // 🔴 <b>이 두 줄이 없으면 글자가 겹친다.</b>
+            //
+            // 📌 실측: 감지 피드의 메시지가 길어지자 WPF 가 폭을 넘긴 부분을
+            //    **말줄임이 아니라 다음 줄로 넘겼고**, 그 두 번째 줄이 아래 줄 위에
+            //    그려져 두 줄이 뭉개졌다. MaxTextWidth 는 「넘치면 접어라」는 뜻이지
+            //    「넘치면 잘라라」가 아니다.
+            //
+            // 🔒 직접 그리는 패널은 줄 높이를 **호출부가 계산해서** 배치한다.
+            //    한 줄일 것이라 가정하고 y 를 더해 가므로, 여기서 한 줄을 보장해야 한다.
+            created.MaxLineCount = 1;
+            created.Trimming = TextTrimming.CharacterEllipsis;
+        }
 
         Cache[key] = created;
         return created;
