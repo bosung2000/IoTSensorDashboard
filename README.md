@@ -179,9 +179,19 @@ C# / .NET 8 · WPF 데스크톱 3앱 · MQTT · SQLite
 dotnet build IoTSensorDashboard.sln    # 오류 0 · 경고 0
 dotnet test                            # 헤드리스 — 앱을 띄우지 않는다
 
-powershell -ExecutionPolicy Bypass -File tools\smoke.ps1   # 기동 스모크
-powershell -ExecutionPolicy Bypass -File tools\run.ps1     # 세 앱 실행
+powershell -ExecutionPolicy Bypass -File tools\smoke.ps1          # 기동 스모크
+powershell -ExecutionPolicy Bypass -File tools\stress-check.ps1   # 극한 부하 자동 검사
+powershell -ExecutionPolicy Bypass -File tools\run.ps1            # 세 앱 실행
 ```
+
+### `stress-check.ps1` — 헤드리스로 못 잡는 것
+
+실제 앱을 띄우고 **UI 자동화로 극한 버튼을 눌러**, `Process.Responding` 으로
+UI 스레드가 살아 있는지 매초 잰다. 관제실 상태 문구도 자동화로 읽어 기계가 판정한다.
+
+📌 같은 증상(부하 중 화면 멈춤)을 **세 번 만에** 고쳤는데,
+앞의 두 번이 부족했던 이유가 같다 — **검증을 헤드리스로만 했다.**
+거기에는 UI 가 아예 없어서 그 결함을 재현할 수 없다.
 
 ### 왜 검증이 둘인가
 
