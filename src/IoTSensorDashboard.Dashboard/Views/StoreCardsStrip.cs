@@ -65,13 +65,7 @@ public sealed class StoreCardsStrip : HudPanel
         dc.DrawRoundedRectangle(HudPalette.Panel, HudPalette.Base, rect, 6, 6);
 
         // 왼쪽 세로 띠 = 이 매장의 건강 상태. 색 하나로 카드 전체의 성격이 정해진다.
-        var status = store.Total == 0
-            ? HudPalette.Unknown
-            : store.Online == 0
-                ? HudPalette.Down
-                : store.Online < store.Total
-                    ? HudPalette.Warn
-                    : HudPalette.In;
+        var status = HealthColors.Of(store.Health);
 
         dc.DrawRoundedRectangle(status, null, new Rect(rect.X, rect.Y + 6, 3, rect.Height - 12), 1.5, 1.5);
 

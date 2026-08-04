@@ -65,13 +65,7 @@ public sealed class SiteStatusPanel : HudPanel
 
             HudDraw.Text(dc, store.Name, area.X, y, 11, HudPalette.Foreground, Ppd, maxWidth: nameWidth);
 
-            var health = store.Total == 0
-                ? HudPalette.Unknown
-                : store.Online == 0
-                    ? HudPalette.Down
-                    : store.Online < store.Total
-                        ? HudPalette.Warn
-                        : HudPalette.In;
+            var health = HealthColors.Of(store.Health);
 
             HudDraw.Text(dc, $"{store.Online:N0}/{store.Total:N0}", xOnline, y, 11, health, Ppd,
                 HudDraw.Weight.Semi, HudDraw.Align.Right);

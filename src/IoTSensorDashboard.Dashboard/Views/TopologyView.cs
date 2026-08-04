@@ -134,13 +134,7 @@ public sealed class TopologyView : HudPanel
 
         var rect = new Rect(hub.X - W / 2, hub.Y - H / 2, W, H);
 
-        var color = group.Uptime switch
-        {
-            null => HudPalette.Unknown,
-            >= 0.999 => HudPalette.In,
-            >= 0.95 => HudPalette.Warn,
-            _ => HudPalette.Down
-        };
+        var color = HealthColors.Of(group.Health);
 
         var pen = new Pen(color, 1.4);
         pen.Freeze();
@@ -184,13 +178,7 @@ public sealed class TopologyView : HudPanel
             dc.DrawLine(dash, hub, at);
 
             var store = stores[i];
-            var color = store.Total == 0
-                ? HudPalette.Unknown
-                : store.Online == 0
-                    ? HudPalette.Down
-                    : store.Online < store.Total
-                        ? HudPalette.Warn
-                        : HudPalette.In;
+            var color = HealthColors.Of(store.Health);
 
             var ring = new Pen(color, 1.6);
             ring.Freeze();
@@ -212,9 +200,12 @@ public sealed class TopologyView : HudPanel
         double y = area.Bottom - 12;
         double x = area.Right;
 
+        // 🔑 네 단계를 전부 적는다 — 특히 「미관측」과 「무응답」을 나눈다.
+        //    둘을 한 칸으로 묶으면 범례를 보고도 회색이 무슨 뜻인지 알 수 없다.
         (string Label, Brush Color)[] items =
         [
-            ("측정 불가", HudPalette.Unknown),
+            ("미관측", HudPalette.Unknown),
+            ("무응답", HudPalette.Down),
             ("일부 오프라인", HudPalette.Warn),
             ("정상", HudPalette.In),
         ];

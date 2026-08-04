@@ -1,4 +1,5 @@
 using IoTSensorDashboard.Core.Domain;
+using IoTSensorDashboard.Core.Health;
 
 namespace IoTSensorDashboard.Dashboard.Model;
 
@@ -45,6 +46,24 @@ public sealed record DashboardSnapshot
     public required int OnlineSensors { get; init; }
     public required int TotalSensors { get; init; }
 
+    /// <summary>
+    /// <b>한 번도 신호를 못 본</b> 센서 수 — 「끊긴 것」과 다르다.
+    ///
+    /// 🔴 <b>왜 따로 세는가</b>: 둘을 합치면 화면이 「센서가 죽었다」라고 말하는데
+    ///    실제로는 <b>아직 우리가 못 본 것</b>일 뿐인 상황이 생긴다.
+    ///
+    /// 📌 실측: 센서 1,000대를 17건/s 로 돌리면 한 바퀴가 약 59초다.
+    ///    게다가 침묵 허용치는 <b>관측된 주기</b>에서 나오므로(주기 × 2.5) 주기를 알려면
+    ///    두 번 봐야 하고, 결국 <b>약 2분</b>이 지나야 전부 온라인으로 자리잡는다.
+    ///    그 2분 동안 화면은 「대량 장애」처럼 보였다 — 정상 기동인데도.
+    ///
+    /// 🔑 원인도 처리도 다르다: 끊김은 <b>장애 조치</b>, 미관측은 <b>설치·배선·명부</b> 문제다.
+    /// </summary>
+    public required int UnknownSensors { get; init; }
+
+    /// <summary>봤다가 끊긴 센서 수 — 진짜 장애 후보.</summary>
+    public int OfflineSensors => Math.Max(0, TotalSensors - OnlineSensors - UnknownSensors);
+
     /// <summary>마지막으로 데이터가 도착한 순간. 화면 갱신과 <b>별개</b>로 「데이터가 살아 있는가」.</summary>
     public DateTimeOffset? LastEventAt { get; init; }
 
@@ -75,6 +94,7 @@ public sealed record DashboardSnapshot
         UniqueEvents = 0,
         OnlineSensors = 0,
         TotalSensors = 0,
+        UnknownSensors = 0,
         Groups = [],
         Stores = [],
         TopThroughput = [],
@@ -87,7 +107,8 @@ public sealed record DashboardSnapshot
 }
 
 /// <summary>본부 한 곳의 집계.</summary>
-public sealed record GroupStat(string Id, string Name, long In, long Out, int Online, int Total)
+public sealed record GroupStat(
+    string Id, string Name, long In, long Out, int Online, int Total, int Unknown)
 {
     /// <summary>
     /// 가동률. <b>분모가 0 이면 null</b> — 「100%」가 아니다.
@@ -96,28 +117,27 @@ public sealed record GroupStat(string Id, string Name, long In, long Out, int On
     ///    "장애 기록이 없다"는 "무사했다"가 아니라 <b>"기록이 없다"</b>일 뿐이다.
     /// </summary>
     public double? Uptime => Total > 0 ? (double)Online / Total : null;
+
+    /// <summary>판정은 <see cref="SiteHealthRule"/>(Core)에 있다 — 화면 네 곳이 공유한다.</summary>
+    public SiteHealth Health => SiteHealthRule.Of(Total, Online, Unknown);
 }
 
 /// <summary>
 /// 매장 한 곳의 집계. <b>누적값</b>이다 — 초당 레이트는 표시 계층이 델타로 계산한다.
 /// </summary>
 public sealed record StoreStat(
-    string Id, string Name, string GroupId, long In, long Out, int Online, int Total)
+    string Id, string Name, string GroupId, long In, long Out, int Online, int Total, int Unknown)
 {
+    public SiteHealth Health => SiteHealthRule.Of(Total, Online, Unknown);
+
     /// <summary>
     /// 사람이 읽을 상태 문구.
     ///
-    /// 🔑 <b>「센서 없음」·「측정 불가」·「정상」을 구분한다.</b>
-    ///    셋을 뭉개면 전부 0 으로 보이고, 그러면 「손님이 없었다」와
-    ///    「우리가 못 봤다」가 같은 화면이 된다.
+    /// 🔑 <b>네 가지를 구분한다</b>: 센서 없음 · 미관측 · 전부 무응답 · 일부 오프라인.
+    ///    뭉개면 전부 0 으로 보이고, 그러면 「손님이 없었다」와 「우리가 못 봤다」와
+    ///    「센서가 죽었다」가 <b>같은 화면</b>이 된다. 셋은 할 일이 완전히 다르다.
     /// </summary>
-    public string StatusText => Total == 0
-        ? "센서 없음"
-        : Online == 0
-            ? "측정 불가 (전부 무응답)"
-            : Online < Total
-                ? $"일부 오프라인 {Total - Online:N0}대"
-                : "정상";
+    public string StatusText => SiteHealthRule.Describe(Total, Online, Unknown);
 }
 
 /// <summary>센서 순위 한 칸.</summary>

@@ -298,20 +298,30 @@ public sealed class DashboardModel : IAsyncDisposable
 
                 int online = 0;
                 int total = 0;
+                int unknown = 0;
 
                 foreach (var sensor in _provisioning.Sensors)
                 {
                     if (!string.Equals(sensor.SiteId, siteId, StringComparison.Ordinal)) continue;
 
                     total++;   // 🔑 「있어야 할 수」가 분모다
-                    if (_health.Status(sensor.Id, now, HealthPolicy.Offline) == SensorStatus.Online) online++;
+
+                    // 🔴 Online 이 아닌 것을 전부 「오프라인」으로 뭉치지 않는다.
+                    //    한 번도 못 본 것(Unknown)은 장애가 아니라 **미관측**이고,
+                    //    원인도 처리도 다르다(설치·배선·명부 ↔ 장애 조치).
+                    switch (_health.Status(sensor.Id, now, HealthPolicy.Offline))
+                    {
+                        case SensorStatus.Online: online++; break;
+                        case SensorStatus.Unknown: unknown++; break;
+                    }
                 }
 
                 long inSum = _inBySite.GetValueOrDefault(siteId);
                 long outSum = _outBySite.GetValueOrDefault(siteId);
 
                 stores.Add(new StoreStat(
-                    siteId, _provisioning.SiteName(siteId), GroupOf(siteId), inSum, outSum, online, total));
+                    siteId, _provisioning.SiteName(siteId), GroupOf(siteId),
+                    inSum, outSum, online, total, unknown));
 
                 trends.Add(new StoreTrend(
                     siteId,
@@ -335,6 +345,7 @@ public sealed class DashboardModel : IAsyncDisposable
                 UniqueEvents = Interlocked.Read(ref _events),
                 OnlineSensors = onlineTotal,
                 TotalSensors = sensorTotal,
+                UnknownSensors = stores.Sum(s => s.Unknown),
                 LastEventAt = _lastMessageAt?.ToLocalTime(),
                 Groups = BuildGroups(stores),
                 Stores = stores,
@@ -400,7 +411,8 @@ public sealed class DashboardModel : IAsyncDisposable
                 g.Sum(s => s.In),
                 g.Sum(s => s.Out),
                 g.Sum(s => s.Online),
-                g.Sum(s => s.Total)))
+                g.Sum(s => s.Total),
+                g.Sum(s => s.Unknown)))
             .OrderBy(g => g.Id, StringComparer.Ordinal)];
     }
 

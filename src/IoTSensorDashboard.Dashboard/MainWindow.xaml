@@ -139,6 +139,13 @@
                                        FontSize="25" FontWeight="Bold"
                                        Typography.NumeralAlignment="Tabular"/>
                         </Viewbox>
+                        <!-- 🔴 「끊김」과 「아직 못 봄」을 나눠 적는다.
+                             기동 직후에는 1,000대 중 대부분이 미관측이다 — 한 바퀴 도는 데
+                             약 59초, 침묵 허용치가 자리잡기까지 약 2분이 걸리기 때문이다.
+                             그 숫자를 「오프라인」이라 부르면 정상 기동이 대량 장애로 읽힌다. -->
+                        <TextBlock x:Name="KpiOnlineNote" Text="" Foreground="#FF9AA2AE"
+                                   FontSize="9.5" HorizontalAlignment="Center" Margin="0,1,0,0"
+                                   Typography.NumeralAlignment="Tabular"/>
                     </StackPanel>
 
                     <StackPanel>

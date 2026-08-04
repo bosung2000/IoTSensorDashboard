@@ -80,6 +80,16 @@ public partial class MainWindow : Window
         KpiOut.Text = s.TotalOut.ToString("N0", CultureInfo.CurrentCulture);
         KpiStay.Text = s.Stay.ToString("N0", CultureInfo.CurrentCulture);
         KpiOnline.Text = $"{s.OnlineSensors:N0} / {s.TotalSensors:N0}";
+
+        // 🔑 나머지가 왜 나머지인지 밝힌다. 「끊김」과 「아직 못 봄」은 할 일이 다르다.
+        //    둘 다 0 이면 아무 말도 하지 않는다 — 정상일 때 조용한 것도 정보다.
+        KpiOnlineNote.Text = (s.UnknownSensors, s.OfflineSensors) switch
+        {
+            (0, 0) => "",
+            (0, var off) => $"끊김 {off:N0}",
+            (var unknown, 0) => $"미관측 {unknown:N0}",
+            var (unknown, off) => $"끊김 {off:N0} · 미관측 {unknown:N0}"
+        };
         KpiEvents.Text = s.UniqueEvents.ToString("N0", CultureInfo.CurrentCulture);
 
         // 🔑 시점 도장 — 갱신이 멈추면 이 값과 현재 시각의 차이가 스스로 자라므로

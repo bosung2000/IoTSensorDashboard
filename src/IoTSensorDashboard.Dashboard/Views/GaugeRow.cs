@@ -61,13 +61,7 @@ public sealed class GaugeRow : HudPanel
         // 관측 못 한 것은 비율을 만들지 않는다.
         double? ratio = total > 0 ? (double)online / total : null;
 
-        var color = ratio switch
-        {
-            null => HudPalette.Unknown,
-            >= 0.999 => HudPalette.In,
-            >= 0.95 => HudPalette.Warn,
-            _ => HudPalette.Down
-        };
+        var color = HealthColors.ForUptime(ratio);
 
         // 바탕 링 — 남은 양(=아직 안 채운 부분)이 보여야 비율로 읽힌다.
         var trackPen = new Pen(HudPalette.FrozenBrush(0x22, 0xFF, 0xFF, 0xFF), 7);
