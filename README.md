@@ -189,6 +189,7 @@ dotnet test --filter "FullyQualifiedName~InvariantGates"
 | [docs/concepts.md](docs/concepts.md) | **개념 풀이** — 브로커 내장 · 코덱 · 큐와 워커 · QoS · TLS |
 | [docs/storage-layer.md](docs/storage-layer.md) | **저장 층 상세** — 스키마 · 트랜잭션 · WAL · 롤업 · 용어 사전 |
 | [docs/messaging-layer.md](docs/messaging-layer.md) | **통신 층 상세** — 브로커 · TLS · 비동기 · 재연결 · 센서 팜 · 용어 사전 |
+| [docs/decision-layer.md](docs/decision-layer.md) | **판정 층 상세** — 헬스 · 권한 · 에스컬레이션 · SLA · **반복되는 설계 패턴 6가지** |
 | [docs/spec-gaps.md](docs/spec-gaps.md) | **명세에 답이 없어서 내가 정한 것들** — 판단·근거·틀렸을 때의 파급 |
 
 ---
