@@ -21,6 +21,24 @@ public partial class MainWindow : Window
     /// <summary>활동 스트립이 보관하는 막대 수. 초당 1개면 약 1분.</summary>
     private const int ActivityPoints = 60;
 
+    /// <summary>
+    /// 레이트를 재는 창(초).
+    ///
+    /// 🔴 <b>화면 갱신 주기와 반드시 분리한다 — 실측 결함.</b>
+    ///    창이 앞에 있으면 프레임 정책이 틱을 <b>33ms</b> 로 올린다. 그런데 센서 팜은
+    ///    <b>50ms 마다 묶어서</b> 발행하므로, 33ms 창에는 그 묶음이 <b>0개 아니면 1개</b>만 들어간다.
+    ///    그러면 같은 500/s 인데도 표시가 0 과 750 사이를 오간다.
+    ///
+    /// 📌 실측(500 발행): 33ms 틱에서 717~1,219(변동폭 502), 500ms 틱에서 862~1,138(변동폭 276).
+    ///    <b>같은 시간 센서 팜의 실측 발행은 500 고정(변동폭 0)이었고</b>,
+    ///    누적 증가분으로 검증한 실제 수신도 501/s 였다 —
+    ///    즉 데이터는 정확했고 <b>이 계산만 틀렸다</b>. 창을 넓히면 사라진다.
+    /// </summary>
+    private const double RateWindowSeconds = 1.0;
+
+    /// <summary>표시용 평균에 쓸 표본 수 — 남은 잔떨림을 눌러 준다.</summary>
+    private const int RateSamples = 3;
+
     /// <summary>피드 보관 줄 수.</summary>
     private const int FeedLines = 60;
 
@@ -34,14 +52,21 @@ public partial class MainWindow : Window
 
     private readonly ServerHost _host = new();
     private readonly DispatcherTimer _dataTimer;
-    private readonly Stopwatch _sinceSample = Stopwatch.StartNew();
-    private readonly Stopwatch _sinceActivity = Stopwatch.StartNew();
 
+    /// <summary>
+    /// 레이트 표본 창. <b>수신·저장·활동이 같은 창을 쓴다</b> —
+    /// 각자 재면 같은 화면에 서로 다른 기준의 「/s」가 뜬다.
+    /// </summary>
+    private readonly Stopwatch _sinceRate = Stopwatch.StartNew();
+
+    private readonly Queue<double> _receiveSamples = new();
     private readonly Queue<double> _activity = new();
     private readonly Queue<FeedLine> _feed = new();
 
     private MetricsSnapshot _previous;
     private long _previousStored;
+    private bool _rateBaselineSet;
+    private double _receiveRate;
     private double _storeRate;
     private DateTimeOffset _lastFeedAt;
     private bool? _lastBrokerOk;
@@ -102,18 +127,11 @@ public partial class MainWindow : Window
     {
         var now = _host.Metrics;
 
-        // ⚠️ 「초당」이라 쓸 거면 **실제 경과 시간**으로 나눈다.
-        //
-        // 📌 타이머 델타를 그대로 「/s」라 불러 처리량이 8배 과대 표시된 적이 있다.
-        //    타이머는 best-effort 라 부하가 커지면 밀리고, 밀린 만큼 델타가 커지는데
-        //    라벨은 그대로여서 **바쁠수록 과대 표시**된다.
-        double elapsed = Math.Max(0.05, _sinceSample.Elapsed.TotalSeconds);
-        _sinceSample.Restart();
+        // 🔑 레이트는 **화면 갱신과 다른 주기**로 잰다(RateWindowSeconds).
+        //    여기서 매 틱 재면 창이 발행 묶음보다 짧아져 숫자가 널뛴다.
+        SampleRates(now);
 
-        double rate = (now.Received - _previous.Received) / elapsed;
-        _previous = now;
-
-        RxValue.Text = ((long)rate).ToString("N0", CultureInfo.CurrentCulture);
+        RxValue.Text = ((long)_receiveRate).ToString("N0", CultureInfo.CurrentCulture);
         WorkerValue.Text = _host.WorkerCount.ToString(CultureInfo.CurrentCulture);
         BacklogValue.Text = _host.Backlog.ToString("N0", CultureInfo.CurrentCulture);
         LatValue.Text = $"{now.AvgLatencyMicros:F1} µs";
@@ -125,7 +143,7 @@ public partial class MainWindow : Window
         UpdateIntegrityChip(now);
         UpdateMaintenanceVital();
 
-        UpdatePipeline(now, rate);
+        UpdatePipeline(now);
 
         // 🔑 이 화면의 숫자가 몇 초 전 것인지 밝힌다.
         //    대시보드와 값이 다를 때 이 시각을 비교하면 시점 차이인지 오류인지 바로 갈린다.
@@ -135,7 +153,7 @@ public partial class MainWindow : Window
 
         // 부하가 없으면 갱신 빈도를 낮춘다 —
         // 「이 시스템은 효율적이다」라고 말하려면 부하가 없을 때 CPU 도 내려가야 한다.
-        _dataTimer.Interval = FramePolicy.IntervalFor(IsActive, rate > 0, animationsOn: true);
+        _dataTimer.Interval = FramePolicy.IntervalFor(IsActive, _receiveRate > 0, animationsOn: true);
     }
 
     /// <summary>
@@ -144,27 +162,61 @@ public partial class MainWindow : Window
     /// 🔑 <b>스냅샷을 한 번만 만들어</b> 두 패널에 같은 것을 넘긴다.
     ///    각자 읽으면 같은 프레임에서 서로 다른 시점의 값을 그리게 된다.
     /// </summary>
-    private void UpdatePipeline(MetricsSnapshot metrics, double receiveRate)
+    /// <summary>
+    /// 수신·저장 레이트 표본을 뜬다 — <b>화면 갱신과 다른 주기</b>로.
+    ///
+    /// 🔑 창이 안 찼으면 <b>아무것도 바꾸지 않는다</b>. 직전 값을 그대로 보여주는 편이,
+    ///    잴 수 없는 구간을 억지로 나눠 만든 숫자를 보여주는 것보다 정직하다.
+    ///
+    /// ⚠️ 나눌 때는 타이머 간격이 아니라 <b>실제 경과 시간</b>을 쓴다.
+    ///    타이머는 best-effort 라 부하가 커지면 밀리고, 밀린 만큼 델타가 커지는데
+    ///    라벨은 그대로여서 바쁠수록 과대 표시된다(과거 8배 부풀린 적이 있다).
+    /// </summary>
+    private void SampleRates(MetricsSnapshot metrics)
+    {
+        double elapsed = _sinceRate.Elapsed.TotalSeconds;
+        if (elapsed < RateWindowSeconds) return;
+
+        _sinceRate.Restart();
+
+        // 🔴 첫 표본은 **버리고 기준점만 잡는다** — 실측 결함.
+        //    저장 카운터는 DB 전체 행 수라 재시작해도 남는다. 직전값을 0 으로 두고
+        //    첫 델타를 그대로 쓰면 「1초에 235만 건 저장」이라는 값이 나오고,
+        //    그게 활동 스트립의 최댓값이 되어 **이후 정상값이 전부 바닥에 깔린다.**
+        //    한 번의 가짜 봉우리가 그 뒤 1분치 그래프를 통째로 무의미하게 만든다.
+        if (!_rateBaselineSet)
+        {
+            _rateBaselineSet = true;
+            _previous = metrics;
+            _previousStored = _host.TotalStored;
+            return;
+        }
+
+        // 수신 — metrics.Received 는 **이벤트** 수다(메시지가 아니라).
+        //        한 메시지에 in·out 두 이벤트가 들어 있어 발행 레이트의 2배가 된다.
+        double instant = Math.Max(0, metrics.Received - _previous.Received) / elapsed;
+        _previous = metrics;
+
+        _receiveSamples.Enqueue(instant);
+        while (_receiveSamples.Count > RateSamples) _receiveSamples.Dequeue();
+
+        _receiveRate = _receiveSamples.Average();
+
+        // 저장 — 활동 스트립에는 **평균이 아니라 순간값**을 넣는다.
+        //        스트립의 일은 「변화를 보여주는 것」이라 평활하면 존재 이유가 없어진다.
+        long stored = _host.TotalStored;
+        _storeRate = Math.Max(0, stored - _previousStored) / elapsed;
+        _previousStored = stored;
+
+        _activity.Enqueue(_storeRate);
+        while (_activity.Count > ActivityPoints) _activity.Dequeue();
+    }
+
+    private void UpdatePipeline(MetricsSnapshot metrics)
     {
         var now = DateTimeOffset.Now;
 
-        // 저장 레이트는 **1초 이상 모아서** 낸다.
-        // 짧은 창의 델타는 정수라 0/1 로만 튀어 「저장이 멈췄다」로 오독된다.
-        double activityElapsed = _sinceActivity.Elapsed.TotalSeconds;
-
-        if (activityElapsed >= 1.0)
-        {
-            _sinceActivity.Restart();
-
-            long stored = _host.TotalStored;
-            _storeRate = Math.Max(0, stored - _previousStored) / activityElapsed;
-            _previousStored = stored;
-
-            _activity.Enqueue(_storeRate);
-            while (_activity.Count > ActivityPoints) _activity.Dequeue();
-        }
-
-        NoteFeed(now, metrics, receiveRate);
+        NoteFeed(now, metrics, _receiveRate);
 
         var (online, _, total) = _host.Health.Summary(DateTimeOffset.UtcNow, HealthPolicy.Offline);
 
@@ -178,7 +230,7 @@ public partial class MainWindow : Window
             Backlog = _host.Backlog,
             Workers = _host.WorkerCount,
             MaxWorkers = ServerHost.MaxWorkers,
-            ReceiveRate = receiveRate,
+            ReceiveRate = _receiveRate,
             StoreRate = _storeRate,
             AvgLatencyMicros = metrics.AvgLatencyMicros,
             TotalReceived = _host.MessagesReceived,
