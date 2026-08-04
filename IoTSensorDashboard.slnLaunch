@@ -1,0 +1,41 @@
+[
+  {
+    "Name": "3앱 전부 (관제실 + 센서팜 + 상황판)",
+    "Projects": [
+      {
+        "Path": "src\\IoTSensorDashboard.ControlRoom\\IoTSensorDashboard.ControlRoom.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\IoTSensorDashboard.SensorFarm\\IoTSensorDashboard.SensorFarm.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\IoTSensorDashboard.Dashboard\\IoTSensorDashboard.Dashboard.csproj",
+        "Action": "Start"
+      }
+    ]
+  },
+  {
+    "Name": "관제실 + 센서팜 (수집만 확인)",
+    "Projects": [
+      {
+        "Path": "src\\IoTSensorDashboard.ControlRoom\\IoTSensorDashboard.ControlRoom.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\IoTSensorDashboard.SensorFarm\\IoTSensorDashboard.SensorFarm.csproj",
+        "Action": "Start"
+      }
+    ]
+  },
+  {
+    "Name": "관제실만 (서버만)",
+    "Projects": [
+      {
+        "Path": "src\\IoTSensorDashboard.ControlRoom\\IoTSensorDashboard.ControlRoom.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
