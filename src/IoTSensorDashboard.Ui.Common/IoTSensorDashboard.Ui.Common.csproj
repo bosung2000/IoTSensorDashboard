@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>IoTSensorDashboard.Ui.Common</RootNamespace>
+    <AssemblyName>IoTSensorDashboard.Ui.Common</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    앱 3개가 공유하는 UI 조각들.
+
+    원본 시스템은 창 크롬·색 토큰·폰트를 외부 SDK 에서 가져다 쓰지만
+    이번 범위에서는 그 SDK 를 쓰지 않는다 — 여기에 동등한 것을 직접 만든다.
+
+    🔒 판정 규칙은 여기 없다. 여기 있는 것은 「그리는 방법」뿐이다.
+       "언제 그릴지"는 Core/Rendering/FramePolicy 가 정한다.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj" />
+  </ItemGroup>
+
+</Project>
