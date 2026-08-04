@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Threading.Channels;
 using IoTSensorDashboard.Core.Codecs;
+using IoTSensorDashboard.Core.Diagnostics;
 using IoTSensorDashboard.Core.Domain;
 using IoTSensorDashboard.Core.Health;
 using IoTSensorDashboard.Core.Ingestion;
@@ -62,7 +63,13 @@ public sealed class ServerHost : IAsyncDisposable
     private readonly SiteProvisioning _provisioning = new();
 
     private readonly CancellationTokenSource _cts = new();
-    private readonly List<Thread> _workers = [];
+
+    /// <summary>워커 목록과 각 워커를 개별로 세울 손잡이. 축소할 때 하나만 끈다.</summary>
+    private readonly object _workersGate = new();
+    private readonly List<(Thread Thread, CancellationTokenSource Stop)> _workers = [];
+
+    /// <summary>축소 판정의 히스테리시스 — 연속으로 한가해야 줄인다.</summary>
+    private int _quietRounds;
 
     private EmbeddedMqttBroker? _broker;
     private MqttIngestionSource? _ingest;
@@ -102,7 +109,10 @@ public sealed class ServerHost : IAsyncDisposable
 
     public int Backlog => _channel?.Reader.Count ?? 0;
 
-    public int WorkerCount => _workers.Count;
+    public int WorkerCount
+    {
+        get { lock (_workersGate) return _workers.Count; }
+    }
 
     public MetricsSnapshot Metrics => _metrics.Snapshot();
 
@@ -156,8 +166,9 @@ public sealed class ServerHost : IAsyncDisposable
         _ingest = new MqttIngestionSource();
         _ = _ingest.RunAsync(OnRawAsync, ct);
 
-        // ④ 워커
-        StartWorker(ct);
+        // ④ 워커 — 하나로 시작해서 백로그에 따라 늘린다.
+        StartWorker();
+        _ = RunScalingLoopAsync(ct);
 
         // ⑤ 생존 확인
         _probe = new MqttHealthProbe();
@@ -167,6 +178,80 @@ public sealed class ServerHost : IAsyncDisposable
 
         // ⑥ 유지보수
         _ = RunMaintenanceLoopAsync(ct);
+
+        Diag.Info("server", $"기동 완료 · 브로커 :{MqttEndpoint.Port} · 워커 상한 {MaxWorkers} · 명부 {_provisioning.SensorIds.Count:N0}대");
+    }
+
+    /// <summary>
+    /// 백로그를 보고 워커를 늘리거나 줄인다.
+    ///
+    /// 🔑 <b>백로그가 차기 전에</b> 늘린다. 다 찬 뒤에 늘리면 이미 폐기가 시작된 뒤다.
+    ///
+    /// 축소에 히스테리시스를 두는 이유: 경계에서 왔다 갔다 하면
+    /// 스레드를 만들고 죽이는 비용이 처리량을 갉아먹는다.
+    /// </summary>
+    private async Task RunScalingLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
+
+                int backlog = Backlog;
+
+                if (backlog >= HighWater)
+                {
+                    _quietRounds = 0;
+
+                    lock (_workersGate)
+                    {
+                        if (_workers.Count < MaxWorkers)
+                        {
+                            StartWorkerLocked();
+                            Diag.Info("server.scale",
+                                $"워커 증설 → {_workers.Count} (백로그 {backlog:N0})");
+                        }
+                    }
+                }
+                else if (backlog <= LowWater)
+                {
+                    // 연속 5초 한가해야 줄인다.
+                    if (++_quietRounds >= 5)
+                    {
+                        _quietRounds = 0;
+                        StopOneWorker(backlog);
+                    }
+                }
+                else
+                {
+                    _quietRounds = 0;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                Diag.Error("server.scale", "워커 조절 루프 오류", ex);
+            }
+        }
+    }
+
+    private void StopOneWorker(int backlog)
+    {
+        lock (_workersGate)
+        {
+            // 🔒 마지막 한 개는 남긴다 — 0 이 되면 수집이 통째로 멈춘다.
+            if (_workers.Count <= 1) return;
+
+            var (_, stop) = _workers[^1];
+            _workers.RemoveAt(_workers.Count - 1);
+            stop.Cancel();
+
+            Diag.Info("server.scale", $"워커 축소 → {_workers.Count} (백로그 {backlog:N0})");
+        }
     }
 
     /// <summary>
@@ -198,16 +283,24 @@ public sealed class ServerHost : IAsyncDisposable
     ///    전용 스레드면 BelowNormal 을 줄 수 있고, OS 스케줄러가 <b>항상 UI 를 먼저 깨운다.</b>
     ///    처리량은 유휴 CPU 로 그대로 흡수되고, 잃는 것은 <b>「UI 를 밀어낼 권리」뿐</b>이다.
     /// </summary>
-    private void StartWorker(CancellationToken ct)
+    private void StartWorker()
     {
-        var thread = new Thread(() => WorkerLoop(ct))
+        lock (_workersGate) StartWorkerLocked();
+    }
+
+    private void StartWorkerLocked()
+    {
+        // 전체 종료와 개별 축소를 둘 다 받는 손잡이.
+        var stop = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+
+        var thread = new Thread(() => WorkerLoop(stop.Token))
         {
             IsBackground = true,
             Priority = ThreadPriority.BelowNormal,
             Name = $"ingest-worker-{_workers.Count + 1}",
         };
 
-        _workers.Add(thread);
+        _workers.Add((thread, stop));
         thread.Start();
     }
 
@@ -246,10 +339,13 @@ public sealed class ServerHost : IAsyncDisposable
             {
                 break;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // 한 배치가 터져도 루프는 계속 돈다.
-                // 실패 자체는 파이프라인의 StoreFailures 가 센다.
+                // 🔒 다만 조용히 넘기지 않는다 — 로그에 남긴다.
+                //    (건수는 파이프라인의 StoreFailures 가 센다.)
+                Diag.Error("server.worker", "배치 처리 오류", ex);
+                Thread.Sleep(50);   // 오류가 반복될 때 로그가 폭주하지 않게
             }
         }
     }
@@ -315,9 +411,10 @@ public sealed class ServerHost : IAsyncDisposable
             {
                 return;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // 다음 주기에 다시 시도한다. 🔑 활력 표시등이 이 루프의 생사를 드러낸다.
+                Diag.Warn("server.health", "생존 확인 루프 오류", ex);
             }
         }
     }
@@ -371,6 +468,7 @@ public sealed class ServerHost : IAsyncDisposable
             {
                 // 🔒 삼키되 남긴다. 두 주기 연속 실패하면 활력 표시등 색이 바뀐다.
                 LastMaintenanceError = ex.Message;
+                Diag.Error("server.maintenance", "유지보수 루프 오류", ex);
             }
         }
     }
@@ -393,10 +491,20 @@ public sealed class ServerHost : IAsyncDisposable
         if (_probe is not null) await _probe.DisposeAsync().ConfigureAwait(false);
         if (_broker is not null) await _broker.DisposeAsync().ConfigureAwait(false);
 
-        foreach (var worker in _workers)
-            worker.Join(TimeSpan.FromSeconds(2));
+        lock (_workersGate)
+        {
+            foreach (var (thread, stop) in _workers)
+            {
+                thread.Join(TimeSpan.FromSeconds(2));
+                stop.Dispose();
+            }
+
+            _workers.Clear();
+        }
 
         _store.Dispose();
         _cts.Dispose();
+
+        Diag.Info("server", "종료 완료");
     }
 }
