@@ -154,7 +154,8 @@ dotnet test --filter "FullyQualifiedName~InvariantGates"
 | 문서 | 내용 |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | **구조 지도** — 무엇이 무엇을 하고, 어떤 도구가 왜 거기 있는지 (다이어그램) |
-| [docs/concepts.md](docs/concepts.md) | **개념 풀이** — 브로커 내장 · 코덱 · 큐와 워커가 실제로 하는 일 |
+| [docs/concepts.md](docs/concepts.md) | **개념 풀이** — 브로커 내장 · 코덱 · 큐와 워커 · QoS · TLS |
+| [docs/storage-layer.md](docs/storage-layer.md) | **저장 층 상세** — 스키마 · 트랜잭션 · WAL · 롤업 · 용어 사전 |
 | [docs/spec-gaps.md](docs/spec-gaps.md) | **명세에 답이 없어서 내가 정한 것들** — 판단·근거·틀렸을 때의 파급 |
 
 ---
