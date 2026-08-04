@@ -17,8 +17,27 @@ public sealed record PipelineSnapshot
     public required int SensorsOnline { get; init; }
     public required int SensorsTotal { get; init; }
 
-    /// <summary>가동률. <b>분모가 0 이면 null</b> — 「100%」가 아니라 「측정 불가」다.</summary>
+    /// <summary>
+    /// 센서 <b>응답률</b>. <b>분모가 0 이면 null</b> — 「100%」가 아니라 「측정 불가」다.
+    ///
+    /// ⚠️ 이건 <b>「응답하는가」</b>이지 <b>「일하고 있는가」</b>가 아니다.
+    ///    핑에 답만 해도 온라인으로 세므로, 발신이 멈춰도 100% 가 나온다.
+    ///    작업량은 <see cref="DataFlowing"/> 과 수신 레이트로 판단한다.
+    /// </summary>
     public double? Uptime => SensorsTotal > 0 ? (double)SensorsOnline / SensorsTotal : null;
+
+    /// <summary>
+    /// 최근에 <b>실제 데이터</b>가 들어오고 있는가.
+    ///
+    /// 🔴 <b>이 값이 없으면 화면이 거짓말을 한다 — 실측으로 재현했다.</b>
+    ///    발신을 완전히 멈춘 상태에서 관제실은 이렇게 보였다:
+    ///    가동률 100.00% · 센서 1,000/1,000 온라인 · 정합 OK·유실 0 · 장애 0건.
+    ///    <b>데이터는 한 건도 안 들어오는데</b> 화면 전체가 초록이었다.
+    ///
+    /// 🧭 「전부 초록불 대시보드가 최약점을 감춘다」의 정확한 사례다.
+    ///    안심 문구 옆에는 그것을 <b>반증할 수 있는 값</b>이 반드시 있어야 한다.
+    /// </summary>
+    public required bool DataFlowing { get; init; }
 
     /// <summary>큐에 밀려 있는 수 — <b>여기가 차면 뒤가 못 따라오고 있다는 뜻</b>이다.</summary>
     public required int Backlog { get; init; }
@@ -91,6 +110,7 @@ public sealed record PipelineSnapshot
         IngestConnected = false,
         SensorsOnline = 0,
         SensorsTotal = 0,
+        DataFlowing = false,
         Backlog = 0,
         Workers = 0,
         MaxWorkers = 1,

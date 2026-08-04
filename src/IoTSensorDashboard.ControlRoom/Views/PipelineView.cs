@@ -46,10 +46,17 @@ public sealed class PipelineView : RenderPanel
     }
 
     /// <summary>
-    /// 가동률 — 화면에서 가장 큰 글자.
+    /// 센서 응답률 — 화면에서 가장 큰 글자.
     ///
     /// 🔴 분모가 0 이면 <b>「측정 불가」</b>다. 100% 가 아니다.
     ///    관측하지 못한 것을 만점으로 그리는 것이 이 프로젝트에서 가장 비싼 거짓말이었다.
+    ///
+    /// 🔴 <b>「가동률」이라 부르지 않는다 — 실측으로 드러난 오해.</b>
+    ///    이 값이 재는 것은 <b>「응답하는가」</b>이지 <b>「일하고 있는가」</b>가 아니다.
+    ///    관제실은 조용한 센서에게 직접 물어보고(핑) 답이 오면 온라인으로 센다.
+    ///    그래서 <b>발신이 완전히 멈춰 데이터가 0 건이어도 이 값은 100%</b> 가 나온다.
+    ///    실제로 그 상태를 재현했을 때 화면 전체가 「완벽」으로 보였다 —
+    ///    「가동률」이라는 말이 그 오해의 절반을 만들고 있었다.
     /// </summary>
     private void DrawUptime(DrawingContext dc, Rect area, PipelineSnapshot s)
     {
@@ -63,7 +70,7 @@ public sealed class PipelineView : RenderPanel
             _ => HudPalette.Down
         };
 
-        HudDraw.Text(dc, "가동률", cx - 96, area.Y + 14, 12.5, HudPalette.TextMuted, Ppd,
+        HudDraw.Text(dc, "센서 응답률", cx - 96, area.Y + 14, 12.5, HudPalette.TextMuted, Ppd,
             HudDraw.Weight.Semi, HudDraw.Align.Right);
 
         if (s.Uptime is double u)
@@ -78,8 +85,25 @@ public sealed class PipelineView : RenderPanel
         }
 
         // 🔑 N/M 을 같이 — 분모를 모르는 비율은 믿을 근거가 없다.
-        HudDraw.Text(dc, $"{s.SensorsOnline:N0} / {s.SensorsTotal:N0} 온라인",
+        HudDraw.Text(dc, $"{s.SensorsOnline:N0} / {s.SensorsTotal:N0} 응답",
             cx - 86, area.Y + 40, 11, HudPalette.TextDim, Ppd);
+
+        // 🔴 응답률만으로는 「데이터가 들어오는가」를 알 수 없다.
+        //    센서가 전부 응답해도 발신이 멈춰 있으면 이 화면은 온통 초록이 된다.
+        //    그 상태를 여기서 깨뜨린다 — 초록불만 있는 화면이 최약점을 감춘다.
+        if (!s.DataFlowing)
+        {
+            // 🔒 오른쪽 끝에 붙인다. 가운데 큰 숫자는 폭이 값에 따라 변하므로
+            //    그 옆에 상대 좌표로 두면 **글자가 겹친다**(실제로 겹쳤다).
+            //    경계가 고정된 쪽에 정렬하는 것이 안전하다.
+            double limit = area.Width * 0.42;
+
+            HudDraw.Text(dc, "⚠ 응답은 오지만 데이터 수신 없음", area.Right, area.Y + 14, 12,
+                HudPalette.Warn, Ppd, HudDraw.Weight.Semi, HudDraw.Align.Right, limit);
+
+            HudDraw.Text(dc, "센서는 살아 있고 발신이 멈춘 상태", area.Right, area.Y + 32, 10,
+                HudPalette.TextDim, Ppd, align: HudDraw.Align.Right, maxWidth: limit);
+        }
     }
 
     /// <summary>센서 다발 → 노드 4개.</summary>

@@ -39,6 +39,14 @@ public partial class MainWindow : Window
     /// <summary>표시용 평균에 쓸 표본 수 — 남은 잔떨림을 눌러 준다.</summary>
     private const int RateSamples = 3;
 
+    /// <summary>
+    /// 이만큼 데이터가 없으면 「들어오지 않는다」로 본다.
+    ///
+    /// 🔑 가장 느린 프리셋(17/s)에서도 1초에 17건이 온다. 5초 침묵은 우연이 아니다.
+    ///    반대로 너무 짧게 잡으면 순간적인 빈틈에 경고가 깜빡여 아무도 안 믿게 된다.
+    /// </summary>
+    private static readonly TimeSpan DataSilence = TimeSpan.FromSeconds(5);
+
     /// <summary>피드 보관 줄 수.</summary>
     private const int FeedLines = 60;
 
@@ -65,6 +73,9 @@ public partial class MainWindow : Window
 
     private long _previousMessages;
     private long _previousStored;
+
+    /// <summary>마지막으로 <b>실제 데이터</b>가 들어온 순간. 핑 응답은 여기 안 들어간다.</summary>
+    private DateTimeOffset _lastDataAt = DateTimeOffset.MinValue;
     private bool _rateBaselineSet;
     private double _receiveRate;
     private double _storeRate;
@@ -205,6 +216,12 @@ public partial class MainWindow : Window
         //    세지 않은 것을 나눗셈으로 지어내지 말고, **실제로 센 카운터**를 쓴다.
         long messages = _host.MessagesReceived;
         double instant = Math.Max(0, messages - _previousMessages) / elapsed;
+
+        // 🔑 「마지막으로 데이터가 들어온 순간」은 카운터가 **실제로 올랐을 때만** 갱신한다.
+        //    핑 응답은 센서를 온라인으로 만들지만 데이터는 아니다. 둘을 섞으면
+        //    발신이 멈춘 상태가 「정상」으로 보인다 — 그게 이 값이 존재하는 이유다.
+        if (messages > _previousMessages) _lastDataAt = DateTimeOffset.Now;
+
         _previousMessages = messages;
 
         _receiveSamples.Enqueue(instant);
@@ -237,6 +254,7 @@ public partial class MainWindow : Window
             IngestConnected = _host.IngestConnected,
             SensorsOnline = online,
             SensorsTotal = total,
+            DataFlowing = DataFlowing(now),
             Backlog = _host.Backlog,
             Workers = _host.WorkerCount,
             MaxWorkers = ServerHost.MaxWorkers,
@@ -293,6 +311,15 @@ public partial class MainWindow : Window
 
         if (now - _lastFeedAt < HeartbeatLine) return;
 
+        // 🔴 데이터가 없는데 「정상」이라 쓰지 않는다.
+        //    0 msg/s 옆에 붙은 「정상」은 그 자체로 안심 문구이고,
+        //    이 피드는 나중에 「언제부터 이랬나」를 묻는 자리라 그 한 단어가 판단을 바꾼다.
+        if (!DataFlowing(now))
+        {
+            Push(now, FeedLevel.Warn, "대기 · 데이터 수신 없음 (센서는 응답 중)");
+            return;
+        }
+
         // 단위를 적되 **짧게** — 피드 폭은 좁고, 넘치면 말줄임에 잘려 뒤가 안 보인다.
         // 화살표가 「들어와서 나간다」는 방향까지 같이 말해 준다.
         // (수신은 메시지, 저장은 이벤트다. 안 적으면 500 → 1,000 이 유실·중복으로 읽힌다.)
@@ -336,6 +363,11 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 최근에 실제 데이터가 들어왔는가 — <b>핑 응답은 세지 않는다</b>.
+    /// </summary>
+    private bool DataFlowing(DateTimeOffset now) => now - _lastDataAt <= DataSilence;
+
     private void UpdateHealthChip()
     {
         var (online, offline, total) = _host.Health.Summary(DateTimeOffset.UtcNow, HealthPolicy.Offline);
@@ -349,11 +381,21 @@ public partial class MainWindow : Window
         //    관제실은 조용한 센서에게 **직접 물어보고**(MqttHealthProbe) 응답을 세지만
         //    대시보드는 도착한 데이터만 본다. 근거가 다르면 값이 달라지는 게 정상이고,
         //    화면은 그 근거를 스스로 말해야 한다. 안 그러면 둘 중 하나가 고장 난 것처럼 보인다.
-        HealthText.Text = neverSeen > 0
-            ? $"센서 {online:N0} / {total:N0} · 미확인 {neverSeen:N0}대 (핑 포함)"
-            : $"센서 {online:N0} / {total:N0} 온라인 (핑 포함)";
+        // 🔴 「응답한다」와 「데이터가 온다」를 한 문구에서 갈라 놓는다.
+        //    발신이 멈춰도 센서는 핑에 답하므로 이 칩은 계속 초록 1,000/1,000 이었다.
+        //    실측에서 **데이터 0 건인데 화면 전체가 정상**으로 보였고,
+        //    그 상태를 깨뜨릴 값이 화면에 하나도 없었다.
+        bool flowing = DataFlowing(DateTimeOffset.Now);
 
-        HealthDot.Fill = offline == 0 ? Ok : neverSeen == total ? Unknown : Warn;
+        HealthText.Text = !flowing && online > 0
+            ? $"센서 {online:N0} / {total:N0} 응답 · ⚠ 데이터 수신 없음"
+            : neverSeen > 0
+                ? $"센서 {online:N0} / {total:N0} · 미확인 {neverSeen:N0}대 (핑 포함)"
+                : $"센서 {online:N0} / {total:N0} 온라인 (핑 포함)";
+
+        HealthDot.Fill = !flowing && online > 0
+            ? Warn
+            : offline == 0 ? Ok : neverSeen == total ? Unknown : Warn;
     }
 
     /// <summary>
