@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>IoTSensorDashboard.Mqtt</RootNamespace>
+    <AssemblyName>IoTSensorDashboard.Mqtt</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      ⚠️ 4.x 와 5.x 는 API 가 다르다. 버전을 올리지 말 것.
+    -->
+    <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj" />
+  </ItemGroup>
+
+</Project>

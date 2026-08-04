@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj" />
     <ProjectReference Include="..\..\src\IoTSensorDashboard.Sqlite\IoTSensorDashboard.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\IoTSensorDashboard.Mqtt\IoTSensorDashboard.Mqtt.csproj" />
   </ItemGroup>
 
 </Project>
