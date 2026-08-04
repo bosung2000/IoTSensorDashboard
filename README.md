@@ -222,6 +222,7 @@ dotnet test --filter "FullyQualifiedName~InvariantGates"
 | [docs/storage-layer.md](docs/storage-layer.md) | **저장 층 상세** — 스키마 · 트랜잭션 · WAL · 롤업 · 용어 사전 |
 | [docs/messaging-layer.md](docs/messaging-layer.md) | **통신 층 상세** — 브로커 · TLS · 비동기 · 재연결 · 센서 팜 · 용어 사전 |
 | [docs/decision-layer.md](docs/decision-layer.md) | **판정 층 상세** — 헬스 · 권한 · 에스컬레이션 · SLA · **반복되는 설계 패턴 6가지** |
+| [docs/presentation-layer.md](docs/presentation-layer.md) | **화면 층 상세** — 커스텀 렌더 · 프레임 정책 · 화면의 정직성 · **다섯 층 총정리** |
 | [docs/spec-gaps.md](docs/spec-gaps.md) | **명세에 답이 없어서 내가 정한 것들** — 판단·근거·틀렸을 때의 파급 |
 
 ---
