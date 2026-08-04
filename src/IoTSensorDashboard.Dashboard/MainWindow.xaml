@@ -3,8 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:ui="clr-namespace:IoTSensorDashboard.Ui.Common.Controls;assembly=IoTSensorDashboard.Ui.Common"
+        xmlns:v="clr-namespace:IoTSensorDashboard.Dashboard.Views"
         Title="IoT 센서 종합 상황판"
-        Height="940" Width="1340"
+        Height="940" Width="1340" MinHeight="620" MinWidth="1020"
         WindowStyle="None"
         AllowsTransparency="False"
         UseLayoutRounding="True"
@@ -44,7 +45,8 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <Button x:Name="FullBtn" Content="⛶" Width="38" Height="34" Click="FullBtn_Click"
-                            Background="Transparent" Foreground="#FF9AA0AC" BorderThickness="0"/>
+                            Background="Transparent" Foreground="#FF9AA0AC" BorderThickness="0"
+                            ToolTip="전체화면 (F11)"/>
                     <Button x:Name="MinBtn" Content="―" Width="38" Height="34" Click="MinBtn_Click"
                             Background="Transparent" Foreground="#FF9AA0AC" BorderThickness="0"/>
                     <Button x:Name="MaxBtn" Content="□" Width="38" Height="34" Click="MaxBtn_Click"
@@ -55,7 +57,7 @@
             </Grid>
 
             <!-- ── Row 1 · 헤더 ─────────────────────────────────────── -->
-            <Grid Grid.Row="1" Margin="16,12,16,8">
+            <Grid Grid.Row="1" Margin="16,10,16,6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
@@ -65,6 +67,8 @@
                 <!-- 권한 스코프 -->
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock Text="종합 상황판" Foreground="#FFDCDFE6" FontSize="18" FontWeight="Bold"/>
+                    <!-- 🔴 WrapPanel 인 이유: 가로 StackPanel 은 폭이 모자라면 넘친 버튼을
+                         **말없이 자른다**. 안 보이면 못 누르고, 못 누르면 없는 기능이다. -->
                     <WrapPanel Margin="0,6,0,0">
                         <TextBlock Text="권한(I4)" Foreground="#FF7E8593" FontSize="11"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -82,45 +86,70 @@
                 </StackPanel>
 
                 <!-- KPI — 이 화면의 주인공 -->
-                <UniformGrid Grid.Column="1" Rows="1" Columns="4" Margin="20,0">
+                <UniformGrid Grid.Column="1" Rows="1" Columns="5" Margin="20,0" MaxWidth="820">
                     <StackPanel>
                         <!-- 🔴 Viewbox DownOnly — 고정폭이면 폭이 모자랄 때 줄지 않고 잘린다.
                              감싸면 작아질지언정 사라지지 않는다. -->
                         <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" MaxHeight="14">
                             <TextBlock Text="누적 유입" Foreground="#FF8A909E" FontSize="11"/>
                         </Viewbox>
-                        <TextBlock x:Name="KpiIn" Text="0" Foreground="#FF5EEAD4"
-                                   FontSize="25" FontWeight="Bold" HorizontalAlignment="Center"
-                                   Typography.NumeralAlignment="Tabular"/>
+                        <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" Margin="0,2,0,0">
+                            <TextBlock x:Name="KpiIn" Text="0" Foreground="#FF5EEAD4"
+                                       FontSize="25" FontWeight="Bold"
+                                       Typography.NumeralAlignment="Tabular"/>
+                        </Viewbox>
                     </StackPanel>
 
                     <StackPanel>
                         <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" MaxHeight="14">
                             <TextBlock Text="누적 유출" Foreground="#FF8A909E" FontSize="11"/>
                         </Viewbox>
-                        <TextBlock x:Name="KpiOut" Text="0" Foreground="#FFC9B3FF"
-                                   FontSize="25" FontWeight="Bold" HorizontalAlignment="Center"
-                                   Typography.NumeralAlignment="Tabular"/>
+                        <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" Margin="0,2,0,0">
+                            <TextBlock x:Name="KpiOut" Text="0" Foreground="#FFC9B3FF"
+                                       FontSize="25" FontWeight="Bold"
+                                       Typography.NumeralAlignment="Tabular"/>
+                        </Viewbox>
                     </StackPanel>
 
                     <StackPanel>
                         <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" MaxHeight="14">
-                            <TextBlock Text="온라인 센서 (I5)" Foreground="#FF8A909E" FontSize="11"/>
+                            <TextBlock Text="현재 체류 (추정)" Foreground="#FF8A909E" FontSize="11"/>
+                        </Viewbox>
+                        <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" Margin="0,2,0,0">
+                            <TextBlock x:Name="KpiStay" Text="0" Foreground="#FFEAC15A"
+                                       FontSize="25" FontWeight="Bold"
+                                       Typography.NumeralAlignment="Tabular"/>
+                        </Viewbox>
+                    </StackPanel>
+
+                    <StackPanel>
+                        <!-- 🔴 「수신 기준」을 반드시 붙인다 — 실측 사고.
+                             같은 시각에 이 화면은 693/1,000, 관제실은 1,000/1,000 을 띄웠다.
+                             둘 다 맞다: 관제실은 **능동 핑 응답**까지 보고 판정하지만
+                             대시보드는 **도착한 데이터만** 본다. 조용한 센서는 여기선 오프라인이다.
+                             근거가 다른 두 값에 같은 이름을 붙이면, 보는 사람은
+                             어느 쪽이 고장인지 알 수 없다 — 계산 오류보다 신뢰를 더 크게 깬다. -->
+                        <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" MaxHeight="14">
+                            <TextBlock Text="온라인 센서 (I5 · 수신 기준)" Foreground="#FF8A909E" FontSize="11"/>
                         </Viewbox>
                         <!-- 🔑 N / M 을 같이 보여준다. M 은 있어야 할 명부 기준이다.
                              비율만 보여주면 분모가 무엇인지 알 수 없고, 그러면 그 비율을 믿을 수 없다. -->
-                        <TextBlock x:Name="KpiOnline" Text="— / —" Foreground="#FFD1D4DC"
-                                   FontSize="25" FontWeight="Bold" HorizontalAlignment="Center"
-                                   Typography.NumeralAlignment="Tabular"/>
+                        <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" Margin="0,2,0,0">
+                            <TextBlock x:Name="KpiOnline" Text="— / —" Foreground="#FFD1D4DC"
+                                       FontSize="25" FontWeight="Bold"
+                                       Typography.NumeralAlignment="Tabular"/>
+                        </Viewbox>
                     </StackPanel>
 
                     <StackPanel>
                         <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" MaxHeight="14">
-                            <TextBlock Text="유입 이벤트 (I1)" Foreground="#FF8A909E" FontSize="11"/>
+                            <TextBlock Text="유일 이벤트 (I1)" Foreground="#FF8A909E" FontSize="11"/>
                         </Viewbox>
-                        <TextBlock x:Name="KpiEvents" Text="0" Foreground="#FF35C7FF"
-                                   FontSize="25" FontWeight="Bold" HorizontalAlignment="Center"
-                                   Typography.NumeralAlignment="Tabular"/>
+                        <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Center" Margin="0,2,0,0">
+                            <TextBlock x:Name="KpiEvents" Text="0" Foreground="#FF35C7FF"
+                                       FontSize="25" FontWeight="Bold"
+                                       Typography.NumeralAlignment="Tabular"/>
+                        </Viewbox>
                     </StackPanel>
                 </UniformGrid>
 
@@ -142,37 +171,79 @@
                 </StackPanel>
             </Grid>
 
-            <!-- ── Row 2 · 매장별 상태 ──────────────────────────────── -->
-            <ui:HudFrame Grid.Row="2" Cut="4" Margin="16,4,16,8" Fill="#C00D1015">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="매장별 상태 현황"
-                               Foreground="#FFDCDFE6" FontWeight="Bold" FontSize="12"
-                               Margin="0,0,0,8"/>
+            <!-- ── Row 2 · 본문 (좌 · 중 · 우) ────────────────────────── -->
+            <Grid Grid.Row="2" Margin="9,2,9,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="294" MinWidth="180"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="306" MinWidth="190"/>
+                </Grid.ColumnDefinitions>
 
-                    <!-- 🔴 목록의 출처는 프로비저닝 명부다. 「데이터가 들어온 매장」이 아니다.
-                         그래야 센서가 전부 죽은 매장도 목록에 남아 「측정 불가」로 보인다. -->
-                    <ListView x:Name="StoreList" Background="Transparent" BorderThickness="0"
-                              Foreground="#FFDCDFE6">
-                        <ListView.View>
-                            <GridView>
-                                <GridViewColumn Header="매장" Width="160"
-                                                DisplayMemberBinding="{Binding Name}"/>
-                                <GridViewColumn Header="온라인" Width="120"
-                                                DisplayMemberBinding="{Binding OnlineText}"/>
-                                <GridViewColumn Header="유입" Width="120"
-                                                DisplayMemberBinding="{Binding InText}"/>
-                                <GridViewColumn Header="유출" Width="120"
-                                                DisplayMemberBinding="{Binding OutText}"/>
-                                <GridViewColumn Header="상태" Width="160"
-                                                DisplayMemberBinding="{Binding StatusText}"/>
-                            </GridView>
-                        </ListView.View>
-                    </ListView>
-                </DockPanel>
-            </ui:HudFrame>
+                <!-- 좌측 -->
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="204"/>
+                    </Grid.RowDefinitions>
+                    <v:SparklinePanel x:Name="Sparklines" Grid.Row="0" Margin="3"/>
+                    <v:BarListPanel x:Name="TopInPanel" Grid.Row="1" Margin="3"
+                                    Title="누적 유입 Top 5 센서" Mode="In"/>
+                </Grid>
+
+                <!-- 중앙 -->
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="76"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="178"/>
+                    </Grid.RowDefinitions>
+
+                    <v:StoreCardsStrip x:Name="Cards" Grid.Row="0" Margin="3"/>
+
+                    <!-- 🔑 토폴로지와 추이를 **한 카드**에 넣는다.
+                         「어디가」와 「언제부터」는 같은 질문의 두 면이라 눈이 오가야 한다.
+                         카드를 나누면 그 사이에 테두리가 생겨 시선이 끊긴다. -->
+                    <Border Grid.Row="1" Margin="3" Background="#FF12151B"
+                            BorderBrush="#FF333B47" BorderThickness="1" CornerRadius="8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="1"/>
+                                <RowDefinition Height="126"/>
+                            </Grid.RowDefinitions>
+                            <v:TopologyView x:Name="Topology" Grid.Row="0" Chromeless="True"/>
+                            <Border Grid.Row="1" Background="#FF2A303A" Margin="12,0"/>
+                            <v:HourlyChartPanel x:Name="Hourly" Grid.Row="2" Chromeless="True"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <v:SiteStatusPanel x:Name="SiteStatus" Grid.Column="0" Margin="3"/>
+                        <v:EventLogPanel x:Name="EventLog" Grid.Column="1" Margin="3"/>
+                    </Grid>
+                </Grid>
+
+                <!-- 우측 -->
+                <Grid Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="172"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="204"/>
+                    </Grid.RowDefinitions>
+                    <v:GaugeRow x:Name="Gauges" Grid.Row="0" Margin="3"/>
+                    <v:BarListPanel x:Name="TopThroughputPanel" Grid.Row="1" Margin="3"
+                                    Title="주요 센서 처리량 Top 5" Mode="Throughput"/>
+                    <v:BarListPanel x:Name="TopOutPanel" Grid.Row="2" Margin="3"
+                                    Title="누적 유출 Top 5 센서" Mode="Out"/>
+                </Grid>
+            </Grid>
 
             <!-- ── Row 3 · 하단 상태바 ──────────────────────────────── -->
-            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="16,0,16,10">
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="16,2,16,8">
                 <TextBlock Text="내부 상태" FontSize="11" Foreground="#FF7E8593"
                            VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <ui:HeartbeatBar x:Name="Vitals" Width="220" VerticalAlignment="Center"/>

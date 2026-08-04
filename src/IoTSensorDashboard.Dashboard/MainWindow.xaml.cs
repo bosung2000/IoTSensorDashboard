@@ -5,14 +5,15 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using IoTSensorDashboard.Core.Domain;
 using IoTSensorDashboard.Core.Rendering;
+using IoTSensorDashboard.Dashboard.Model;
 
 namespace IoTSensorDashboard.Dashboard;
 
 public partial class MainWindow : Window
 {
-    private static readonly Brush Ok = new SolidColorBrush(Color.FromRgb(0x08, 0x99, 0x81));
-    private static readonly Brush Warn = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07));
-    private static readonly Brush Bad = new SolidColorBrush(Color.FromRgb(0xF2, 0x36, 0x45));
+    private static readonly Brush Ok = Frozen(0x08, 0x99, 0x81);
+    private static readonly Brush Warn = Frozen(0xFF, 0xC1, 0x07);
+    private static readonly Brush Bad = Frozen(0xF2, 0x36, 0x45);
 
     private readonly DashboardModel _model = new();
     private readonly DispatcherTimer _timer;
@@ -23,7 +24,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // ⚠️ 우선순위 명시. 기본값에 맡기면 값이 굳는다.
+        // ⚠️ 우선순위 명시. 기본값(Background)에 맡기면 애니메이션 틱에 밀려
+        //    **숫자가 영원히 갱신되지 않는다.** 화면은 살아 있어 보이는데 값만 굳는,
+        //    가장 찾기 어려운 부류다.
         _timer = new DispatcherTimer(DispatcherPriority.DataBind)
         {
             Interval = FramePolicy.Idle
@@ -44,32 +47,46 @@ public partial class MainWindow : Window
 
     private void OnTick(object? sender, EventArgs e)
     {
-        var now = DateTimeOffset.UtcNow;
-
         ClockText.Text = DateTime.Now.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
 
+        // 🔑 한 번만 뜬다. 패널마다 모델을 따로 읽으면 같은 프레임 안에서
+        //    **서로 다른 시점**의 값을 그리게 되고, 「합계 ≠ 부분의 합」이 되어
+        //    설명할 수 없는 화면이 나온다.
+        var snapshot = _model.Snapshot(DateTimeOffset.UtcNow);
+
+        UpdateHeader(snapshot);
         UpdateFeedChip();
 
-        var (inFlow, outFlow) = _model.FlowSummary(now);
-        var (online, total) = _model.OnlineSummary(now);
-
-        KpiIn.Text = inFlow.ToString("N0", CultureInfo.CurrentCulture);
-        KpiOut.Text = outFlow.ToString("N0", CultureInfo.CurrentCulture);
-
-        // 🔑 N / M — M 은 있어야 할 명부 기준이다.
-        KpiOnline.Text = $"{online:N0} / {total:N0}";
-
-        KpiEvents.Text = _model.TotalEvents.ToString("N0", CultureInfo.CurrentCulture);
-
-        StoreList.ItemsSource = _model.Stores(now).Select(ToRow).ToList();
-
-        StampText.Text = _model.LastMessageAt is { } last
-            ? $"기준 {last.ToLocalTime():HH:mm:ss}"
-            : "아직 수신 없음";
+        Sparklines.Update(snapshot);
+        TopInPanel.Update(snapshot);
+        Cards.Update(snapshot);
+        Topology.Update(snapshot);
+        Hourly.Update(snapshot);
+        SiteStatus.Update(snapshot);
+        EventLog.Update(snapshot);
+        Gauges.Update(snapshot);
+        TopThroughputPanel.Update(snapshot);
+        TopOutPanel.Update(snapshot);
 
         Vitals.Beat("feed");
 
+        // 유휴일 때 프레임을 늦춘다 — 아무도 안 보는 화면에 CPU 를 쓰지 않는다.
         _timer.Interval = FramePolicy.IntervalFor(IsActive, _model.Mode == FeedMode.Live, animationsOn: true);
+    }
+
+    private void UpdateHeader(DashboardSnapshot s)
+    {
+        KpiIn.Text = s.TotalIn.ToString("N0", CultureInfo.CurrentCulture);
+        KpiOut.Text = s.TotalOut.ToString("N0", CultureInfo.CurrentCulture);
+        KpiStay.Text = s.Stay.ToString("N0", CultureInfo.CurrentCulture);
+        KpiOnline.Text = $"{s.OnlineSensors:N0} / {s.TotalSensors:N0}";
+        KpiEvents.Text = s.UniqueEvents.ToString("N0", CultureInfo.CurrentCulture);
+
+        // 🔑 시점 도장 — 갱신이 멈추면 이 값과 현재 시각의 차이가 스스로 자라므로
+        //    **멈춘 화면이 정상처럼 보이지 않는다.**
+        StampText.Text = s.LastEventAt is { } last
+            ? $"기준 {last:HH:mm:ss}"
+            : "아직 수신 없음";
     }
 
     /// <summary>
@@ -99,31 +116,6 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// 표시용 행.
-    ///
-    /// 🔒 센서가 0대이거나 전부 죽은 매장도 <b>목록에 남는다.</b>
-    ///    사라지면 「그런 매장이 없구나」가 된다 — 0 으로 표시되는 것보다 나쁘다.
-    /// </summary>
-    private static StoreRow ToRow(StoreStat stat)
-    {
-        // 관측된 적이 없으면 「측정 불가」다. 0 도 100% 도 아니다.
-        string status = stat.Total == 0
-            ? "센서 없음"
-            : stat.Online == 0
-                ? "측정 불가 (전부 무응답)"
-                : stat.Online < stat.Total
-                    ? $"일부 오프라인 {stat.Total - stat.Online:N0}대"
-                    : "정상";
-
-        return new StoreRow(
-            stat.Name,
-            $"{stat.Online:N0} / {stat.Total:N0}",
-            stat.In.ToString("N0", CultureInfo.CurrentCulture),
-            stat.Out.ToString("N0", CultureInfo.CurrentCulture),
-            status);
-    }
-
     private void Scope_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: string tag }) return;
@@ -135,7 +127,7 @@ public partial class MainWindow : Window
         var siteId = string.IsNullOrWhiteSpace(parts[1]) ? null : parts[1];
         _model.SetScope(role, siteId);
 
-        // 🔒 스코프 전환은 감사 로그에 남길 대상이다(이번 범위에서는 화면에만 표기).
+        // 🔒 스코프 전환은 감사 대상이다(이번 범위에서는 화면 표기 + 모델 로그).
         ScopeNote.Text = $"스코프: {role}{(siteId is null ? "" : $" · {siteId}")}";
     }
 
@@ -177,15 +169,10 @@ public partial class MainWindow : Window
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
 
-    /// <summary>
-    /// 목록 행.
-    ///
-    /// 🔑 <c>ToString</c> 을 재정의하지 않으면 화면에 타입 이름이 그대로 보인다.
-    ///    (여기서는 컬럼 바인딩을 쓰지만, 규칙 자체를 지킨다.)
-    /// </summary>
-    private sealed record StoreRow(
-        string Name, string OnlineText, string InText, string OutText, string StatusText)
+    private static Brush Frozen(byte r, byte g, byte b)
     {
-        public override string ToString() => $"{Name} · {OnlineText}";
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
     }
 }
