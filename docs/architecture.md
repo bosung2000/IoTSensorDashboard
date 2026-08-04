@@ -394,12 +394,13 @@ flowchart TD
     L1["✅ 1층 · Core<br/>판정 규칙"] --> L2["✅ 2층 · Sqlite<br/>영속 저장"]
     L2 --> L3["✅ 3층 · Mqtt<br/>브로커 · 센서 팜"]
     L3 --> L4["✅ 4층 · 판정 확장<br/>헬스 · 권한 · 알림 · SLA"]
-    L4 --> L5["5층 · WPF<br/>화면 3개"]
+    L4 --> L5["✅ 5층 · WPF<br/>화면 3개"]
 
     style L1 fill:#0d3320,stroke:#2ea043,color:#e6edf3
     style L2 fill:#0d3320,stroke:#2ea043,color:#e6edf3
     style L3 fill:#0d3320,stroke:#2ea043,color:#e6edf3
     style L4 fill:#0d3320,stroke:#2ea043,color:#e6edf3
+    style L5 fill:#0d3320,stroke:#2ea043,color:#e6edf3
 ```
 
 | 층 | 무엇 | 새로 쓰는 도구 |
@@ -407,7 +408,7 @@ flowchart TD
 | ~~2층~~ | ~~파일에 저장 · 오래된 건 집계로 접기 · 공간 회수~~ | SQLite · 트랜잭션 · WAL |
 | ~~3층~~ | ~~진짜 메시지를 주고받기 · 끊겨도 다시 붙기~~ | MQTTnet · TLS · 비동기 |
 | ~~4층~~ | ~~센서 생사 · 권한 경계 · 통지 사다리 · 가동률~~ | **없음 — 전부 순수 로직** |
-| **5층** | 화면 · 직접 그리기 · 60fps 를 쓰지 않는 법 | WPF · `OnRender` |
+| ~~5층~~ | ~~화면 · 직접 그리기 · 60fps 를 쓰지 않는 법~~ | WPF · `OnRender` |
 
 > 🔑 **4층에 새 도구가 하나도 없다는 것**이 이 설계의 결과다.
 > 「이 숫자가 틀리면 큰일 나는」 판정을 전부 Core 로 꺼냈기 때문에,

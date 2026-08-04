@@ -157,27 +157,59 @@ C# / .NET 8 · WPF 데스크톱 3앱 · MQTT · SQLite
 
 + 실제 브로커를 띄우는 통합 검증(왕복 · TLS 전용 · 재연결 · 헬스 선별)
 
-**테스트 316건 · 오류 0 · 경고 0**
+**5층 · WPF 3앱** — 화면
 
-### ⬜ 아직 없는 것
-
-| 층 | 내용 |
+| 영역 | 내용 |
 |---|---|
-| 5층 | WPF 3앱 — 커스텀 렌더링 · 시각 규격 · 기동 스모크 |
+| 렌더 정책 | 부하가 없으면 **CPU 도 내려간다** (33 / 125 / 500 / 1000ms) |
+| Ui.Common | **선 위계 4단계** · HUD 배경 3층 · 창 크롬 · 활력 표시등 |
+| 텍스트 캐시 | 화면이 굳던 사고의 봉합 — 임베드 폰트 재로딩 차단 |
+| ControlRoom | 브로커 + 수집 + 저장 + 유지보수 + 생존 감시 |
+| SensorFarm | 타일 1,000개 커스텀 렌더 · 오프라인 토글 · 이상치 주입 |
+| Dashboard | 권한 스코프 전환 · **Demo 모드를 숨기지 않는다** |
+| 기동 스모크 | `dotnet test` 가 못 보는 것 — XAML 파싱 · 리소스 · `App.xaml` 결선 |
+
+**테스트 323건 · 오류 0 · 경고 0 · 기동 스모크 통과**
 
 ---
 
-## 빌드 · 테스트
+## 빌드 · 실행
 
 ```bash
-dotnet build IoTSensorDashboard.sln    # 오류 0 · 경고 0 이어야 한다
+dotnet build IoTSensorDashboard.sln    # 오류 0 · 경고 0
 dotnet test                            # 헤드리스 — 앱을 띄우지 않는다
 
-# 불변식 게이트만
-dotnet test --filter "FullyQualifiedName~InvariantGates"
+powershell -ExecutionPolicy Bypass -File tools\smoke.ps1   # 기동 스모크
+powershell -ExecutionPolicy Bypass -File tools\run.ps1     # 세 앱 실행
 ```
 
+### 왜 검증이 둘인가
+
+`dotnet test` 는 **Core · Mqtt · Sqlite 만** 본다 — 테스트가 UI 앱을 참조하지 않는다.
+그래서 XAML 파싱 오류 · 리소스 누락 · `App.xaml` 결선 문제는 **전부 그린인데도** 남는다.
+
+> 📌 실제로 `App.xaml` 에 `x:Class` 가 빠져 `App` 클래스가 통째로 죽어 있던 적이 있고,
+> 그때 테스트는 전부 그린이었다.
+
+### 실행 순서
+
+```
+ControlRoom  →  (5초)  →  SensorFarm  →  (2초)  →  Dashboard
+```
+
+ControlRoom 이 **브로커를 소유**하므로 먼저 떠 있어야 한다.
+순서를 어겨도 재연결 루프가 결국 붙지만 백오프만큼 늦는다.
+
+띄운 뒤 **센서 팜에서 발행 속도를 고르면** 데이터가 흐른다(기본값은 「정지」).
+
+---
+
 전제: **.NET 8 SDK**. 외부 서비스는 필요 없다(브로커는 앱 내장, DB 는 로컬 파일).
+
+```bash
+# 불변식 게이트만 돌리기
+dotnet test --filter "FullyQualifiedName~InvariantGates"
+```
 
 ---
 
