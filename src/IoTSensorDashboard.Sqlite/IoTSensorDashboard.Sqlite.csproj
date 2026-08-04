@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>IoTSensorDashboard.Sqlite</RootNamespace>
+    <AssemblyName>IoTSensorDashboard.Sqlite</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+  </ItemGroup>
+
+  <!--
+    이 프로젝트는 Core 의 계약(IEventStore · IAuditLog · IOutageLog)을 구현하기만 한다.
+    판정 규칙은 여기 없다 — 있으면 SQLite 를 띄워야만 검증할 수 있게 되기 때문이다.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\IoTSensorDashboard.Core\IoTSensorDashboard.Core.csproj" />
+  </ItemGroup>
+
+</Project>
