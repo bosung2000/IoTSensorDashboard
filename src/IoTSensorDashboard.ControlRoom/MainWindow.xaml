@@ -3,8 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:ui="clr-namespace:IoTSensorDashboard.Ui.Common.Controls;assembly=IoTSensorDashboard.Ui.Common"
+        xmlns:v="clr-namespace:IoTSensorDashboard.ControlRoom.Views"
         Title="관제실 — 라이브 파이프라인"
-        Height="605" Width="1200" Left="10" Top="345"
+        Height="760" Width="1200" MinHeight="560" MinWidth="900" Left="10" Top="140"
         WindowStartupLocation="Manual"
         WindowStyle="None"
         AllowsTransparency="False"
@@ -27,6 +28,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -34,7 +36,7 @@
 
             <!-- 배경은 전 행 아래에 깔린다.
                  패널이 「같은 평면에 붙은 스티커」가 아니라 「위에 떠 있는 판」으로 읽히게 한다. -->
-            <ui:HudBackdrop Grid.RowSpan="5"/>
+            <ui:HudBackdrop Grid.RowSpan="6"/>
 
             <!-- ── Row 0 · 캡션 바 ───────────────────────────────────── -->
             <Grid Grid.Row="0" Background="#E8121519" Height="36">
@@ -128,8 +130,21 @@
                 </ui:HudFrame>
             </Grid>
 
-            <!-- ── Row 3 · 실측 처리량 카드 6개 ──────────────────────── -->
-            <UniformGrid Grid.Row="3" Rows="1" Columns="6" Margin="14,4,14,8">
+            <!-- ── Row 3 · 파이프라인 그림 + 감지 피드 ──────────────────
+                 🔑 이 화면의 주인공. 숫자 카드만으로는 **어느 단계가 막혔는지**
+                    사람이 머릿속에서 이어 붙여야 한다. 순서대로 그리면 눈이 거기서 멈춘다. -->
+            <Grid Grid.Row="3" Margin="14,2,14,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="290" MinWidth="150"/>
+                </Grid.ColumnDefinitions>
+
+                <v:PipelineView x:Name="Pipeline" Grid.Column="0" Margin="0,0,4,0"/>
+                <v:EventFeedView x:Name="Feed" Grid.Column="1" Margin="4,0,0,0"/>
+            </Grid>
+
+            <!-- ── Row 4 · 실측 처리량 카드 6개 ──────────────────────── -->
+            <UniformGrid Grid.Row="4" Rows="1" Columns="6" Margin="14,4,14,8">
                 <ui:HudFrame Cut="4" Margin="0,0,5,0" Fill="#C00D1015" Accent="#FF5EEAD4">
                     <StackPanel>
                         <TextBlock x:Name="RxValue" Text="0" Foreground="#FFDCDFE6"
@@ -183,8 +198,8 @@
                 </ui:HudFrame>
             </UniformGrid>
 
-            <!-- ── Row 4 · 하단 상태바 ───────────────────────────────── -->
-            <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="14,0,14,10">
+            <!-- ── Row 5 · 하단 상태바 ───────────────────────────────── -->
+            <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="14,0,14,10">
                 <TextBlock Text="내부 상태" FontSize="11" Foreground="#FF7E8593"
                            VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <ui:HeartbeatBar x:Name="Vitals" Width="360" VerticalAlignment="Center"/>
