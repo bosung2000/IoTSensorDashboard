@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using IoTSensorDashboard.Core.Provisioning;
 using IoTSensorDashboard.Mqtt;
 using Xunit;
@@ -247,6 +248,105 @@ public sealed class SensorFarmEngineTests
             Assert.InRange(r.In, 0, SensorFarmEngine.MaxPeoplePerSecondPerSensor);
             Assert.InRange(r.Out, 0, SensorFarmEngine.MaxPeoplePerSecondPerSensor);
         });
+    }
+
+    // ── 🔴 화면이 엔진을 훑는 비용 (실제 결함의 회귀 방지) ──────────────
+
+    [Fact]
+    public void 상태를_배열로_한_번에_복사한다()
+    {
+        var engine = NewEngine(8);
+        engine.SetOfflineAt(1, true);
+        engine.SetOfflineAt(5, true);
+
+        var states = new bool[8];
+        engine.CopyOnlineStates(states);
+
+        Assert.True(states[0]);
+        Assert.False(states[1]);
+        Assert.True(states[4]);
+        Assert.False(states[5]);
+    }
+
+    [Fact]
+    public void 복사본은_이후_변경에_영향받지_않는다()
+    {
+        // 화면은 프레임 시작에 찍은 스냅샷으로 한 프레임을 그린다.
+        // 그리는 도중에 값이 바뀌면 한 화면 안에서 서로 안 맞는 상태가 그려진다.
+        var engine = NewEngine(4);
+
+        var states = new bool[4];
+        engine.CopyOnlineStates(states);
+
+        engine.SetOfflineAt(0, true);   // 복사 뒤에 바꾼다
+
+        Assert.True(states[0]);          // 스냅샷은 그대로
+        Assert.False(engine.IsOnlineAt(0));
+    }
+
+    [Fact]
+    public void 짧은_배열을_줘도_터지지_않는다()
+    {
+        // 창 크기가 바뀌는 도중 배열이 아직 안 늘어난 순간이 있을 수 있다.
+        var engine = NewEngine(10);
+        var small = new bool[3];
+
+        var exception = Record.Exception(() => engine.CopyOnlineStates(small));
+
+        Assert.Null(exception);
+        Assert.All(small, Assert.True);
+    }
+
+    [Fact]
+    public void 인덱스로_묻는_것이_ID로_묻는_것과_같은_답을_준다()
+    {
+        var engine = NewEngine(12);
+        engine.SetOfflineAt(3, true);
+
+        for (int i = 0; i < 12; i++)
+        {
+            var id = SiteProvisioning.SensorIdFor(i);
+            Assert.Equal(engine.IsOnline(id), engine.IsOnlineAt(i));
+        }
+    }
+
+    [Fact]
+    public void 전체_복사가_하나씩_묻는_것보다_훨씬_싸다()
+    {
+        // 🔴 이것이 결함의 핵심이었다.
+        //
+        //    화면이 타일마다 IsOnline(문자열) 을 불렀고, 그 안에서
+        //      · 선형 탐색으로 인덱스를 다시 찾고
+        //      · 락을 잡았다.
+        //    타일 1,000개 × 30fps 면 초당 최대 3,000만 회 문자열 비교 + 락 3만 회다.
+        //
+        //    CPU 낭비보다 **락 경합**이 더 치명적이었다 —
+        //    같은 락을 쓰는 발행 스레드가 함께 느려졌다.
+        var engine = NewEngine(1_000);
+        var states = new bool[1_000];
+
+        // 예열
+        for (int i = 0; i < 1_000; i++) engine.IsOnline(SiteProvisioning.SensorIdFor(i));
+        engine.CopyOnlineStates(states);
+
+        var oneByOne = Stopwatch.StartNew();
+        for (int frame = 0; frame < 30; frame++)
+            for (int i = 0; i < 1_000; i++)
+                engine.IsOnline(SiteProvisioning.SensorIdFor(i));   // 옛 방식
+        oneByOne.Stop();
+
+        var bulk = Stopwatch.StartNew();
+        for (int frame = 0; frame < 30; frame++)
+            engine.CopyOnlineStates(states);                        // 지금 방식
+        bulk.Stop();
+
+        // 30프레임(1초 분량) 기준.
+        Assert.True(bulk.Elapsed < oneByOne.Elapsed,
+            $"전체 복사가 더 싸야 한다 (하나씩 {oneByOne.ElapsedMilliseconds}ms / 복사 {bulk.ElapsedMilliseconds}ms)");
+
+        // 🔒 화면 한 프레임이 이 정도면 30fps 예산(33ms)에 아무 영향이 없다.
+        Assert.True(bulk.ElapsedMilliseconds < 30,
+            $"30프레임 분량 복사에 {bulk.ElapsedMilliseconds}ms — 너무 느리다");
     }
 
     // ── 결정성 ───────────────────────────────────────────────────────────

@@ -409,11 +409,12 @@ public partial class MainWindow : Window
 
     private void OnTileClicked(int index)
     {
-        var id = SiteProvisioning.SensorIdFor(index);
-        bool wasOnline = _engine.IsOnline(id);
+        // 클릭은 드물게 일어나므로 여기서는 인덱스로 바로 묻는다(탐색 없음).
+        bool wasOnline = _engine.IsOnlineAt(index);
 
         _engine.SetOfflineAt(index, wasOnline);
-        Diag.Info("farm.toggle", $"{id} → {(wasOnline ? "오프라인" : "온라인")}");
+        Diag.Info("farm.toggle",
+            $"{SiteProvisioning.SensorIdFor(index)} → {(wasOnline ? "오프라인" : "온라인")}");
     }
 
     private void Preset_Click(object sender, RoutedEventArgs e)

@@ -103,11 +103,57 @@ public sealed class SensorFarmEngine
         get { lock (_gate) return _buffers.Sum(b => b.Count); }
     }
 
+    /// <summary>
+    /// 센서 ID 로 물어본다.
+    ///
+    /// ⚠️ <b>고빈도 경로에서 부르지 말 것.</b> ID → 인덱스 변환이 선형 탐색이다.
+    ///    화면처럼 전체를 훑어야 하면 <see cref="CopyOnlineStates"/> 를 쓴다.
+    /// </summary>
     public bool IsOnline(string sensorId)
     {
         int i = IndexOf(sensorId);
         if (i < 0) return false;
         lock (_gate) return !_offline[i];
+    }
+
+    /// <summary>인덱스로 물어본다. 탐색이 없다.</summary>
+    public bool IsOnlineAt(int index)
+    {
+        if (index < 0 || index >= _offline.Length) return false;
+        lock (_gate) return !_offline[index];
+    }
+
+    /// <summary>
+    /// 전체 온라인 상태를 <b>한 번의 락으로</b> 배열에 복사한다.
+    ///
+    /// 🔴 이 메서드가 존재하는 이유 — 실측 결함:
+    ///
+    ///    화면이 타일마다 <see cref="IsOnline"/> 을 불렀다. 타일이 1,000개이므로
+    ///    <b>프레임당</b>
+    ///      · 센서 ID 문자열 1,000개 생성
+    ///      · 선형 탐색으로 최대 100만 회 문자열 비교
+    ///      · <b>락 1,000회 획득</b>
+    ///    이 일어났다.
+    ///
+    ///    CPU 낭비보다 <b>락 경합</b>이 더 치명적이었다 —
+    ///    그 락은 발행 스레드가 쓰는 것과 같은 락이라
+    ///      · UI 가 락을 기다려 <b>화면이 멈추고</b>
+    ///      · 발행이 락을 기다려 <b>처리량이 안 올랐다.</b>
+    ///
+    /// 🧭 교훈: API 하나만 보면 멀쩡한데 <b>호출 빈도</b>를 보면 아닌 경우가 있다.
+    ///    「OnRender 안에서 무거운 계산 금지」에는 <b>남의 락을 1,000번 잡는 것</b>도 포함된다.
+    /// </summary>
+    /// <param name="destination">센서 수 이상이어야 한다. 짧으면 그 길이까지만 채운다.</param>
+    public void CopyOnlineStates(bool[] destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+
+        int count = Math.Min(destination.Length, _offline.Length);
+
+        lock (_gate)
+        {
+            for (int i = 0; i < count; i++) destination[i] = !_offline[i];
+        }
     }
 
     /// <summary>
