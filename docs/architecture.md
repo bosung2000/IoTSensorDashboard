@@ -182,11 +182,22 @@ S:\IoTSensorDashboard\
 │   ├── SqliteOutageLog.cs     장애 이력
 │   └── SqliteAuditLog.cs      감사 로그
 │
+├── 📁 src\IoTSensorDashboard.Mqtt\        ← 앱끼리 이어 주는 층
+│   ├── EmbeddedMqttBroker.cs  앱 안에서 도는 브로커
+│   ├── DevTls.cs              런타임 생성 자체서명 인증서
+│   ├── MqttReconnect.cs       연결될 때까지 무한 재시도 ⭐
+│   ├── MqttIngestionSource.cs 구독 채널 (수신만)
+│   ├── MqttSensorPublisher.cs 발행 클라이언트 (팜)
+│   ├── MqttHealthProbe.cs     생존 확인 (관제실)
+│   └── SensorFarmEngine.cs    버퍼 · 백필 · 폐기 계수 · 이상치
+│
 └── 📁 tests\IoTSensorDashboard.Tests\     ← 규칙이 깨졌는지 감시
     ├── InvariantGates\  절대 깨지면 안 되는 것
-    ├── Ingestion\       판정이 일관적인가
+    ├── Ingestion\       판정이 일관적인가 · 토픽 규약
     ├── Codecs\          이기종을 제대로 흡수하는가
-    └── Storage\         영속 저장이 계약대로인가
+    ├── Storage\         영속 저장이 계약대로인가
+    ├── Provisioning\    명부가 결정적인가 (I5 의 분모)
+    └── Mqtt\            실제 브로커를 띄워서 왕복·TLS·재연결
 ```
 
 ### 폴더별로 무슨 일을 하나
@@ -375,18 +386,19 @@ flowchart LR
 ```mermaid
 flowchart TD
     L1["✅ 1층 · Core<br/>판정 규칙"] --> L2["✅ 2층 · Sqlite<br/>영속 저장"]
-    L2 --> L3["3층 · MQTT<br/>브로커 · 센서 팜"]
+    L2 --> L3["✅ 3층 · Mqtt<br/>브로커 · 센서 팜"]
     L3 --> L4["4층 · 판정 확장<br/>헬스 · 권한 · 알림 · SLA"]
     L4 --> L5["5층 · WPF<br/>화면 3개"]
 
     style L1 fill:#0d3320,stroke:#2ea043,color:#e6edf3
     style L2 fill:#0d3320,stroke:#2ea043,color:#e6edf3
+    style L3 fill:#0d3320,stroke:#2ea043,color:#e6edf3
 ```
 
 | 층 | 무엇 | 새로 쓰는 도구 |
 |---|---|---|
 | ~~2층~~ | ~~파일에 저장 · 오래된 건 집계로 접기 · 공간 회수~~ | SQLite · 트랜잭션 · WAL |
-| **3층** | 진짜 메시지를 주고받기 · 끊겨도 다시 붙기 | MQTTnet · TLS · 비동기 |
+| ~~3층~~ | ~~진짜 메시지를 주고받기 · 끊겨도 다시 붙기~~ | MQTTnet · TLS · 비동기 |
 | **4층** | 센서가 죽었는지 판정 · 누가 뭘 볼 수 있는지 · 언제 누구에게 알릴지 | (순수 로직) |
 | **5층** | 화면 · 직접 그리기 · 60fps 를 쓰지 않는 법 | WPF · `OnRender` |
 
