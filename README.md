@@ -140,6 +140,7 @@ dotnet test --filter "FullyQualifiedName~InvariantGates"
 
 | 문서 | 내용 |
 |---|---|
+| [docs/architecture.md](docs/architecture.md) | **구조 지도** — 무엇이 무엇을 하고, 어떤 도구가 왜 거기 있는지 (다이어그램) |
 | [docs/spec-gaps.md](docs/spec-gaps.md) | **명세에 답이 없어서 내가 정한 것들** — 판단·근거·틀렸을 때의 파급 |
 
 ---
