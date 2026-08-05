@@ -264,6 +264,7 @@ dotnet test --filter "FullyQualifiedName~InvariantGates"
 | [docs/ui-guide.md](docs/ui-guide.md) | 🖥 **화면 안내** — 각 화면의 **모든 표시 요소**가 무엇이고 어디서 오는지 |
 | [docs/reading-the-screens.md](docs/reading-the-screens.md) | 🔍 **화면 읽는 법** — 돌려 보다 「이 숫자 맞나?」 싶을 때. 정상/이상 판단표 · 로그 보는 법 |
 | [docs/reliability-lessons.md](docs/reliability-lessons.md) | 🔴 **신뢰성 기록** — 빌드는 그린인데 런타임에서 틀렸던 것 12건. 반복된 부류 3가지 · 검증 함정 · **착수 전 체크리스트** |
+| [docs/capacity-and-scale.md](docs/capacity-and-scale.md) | 📈 **용량과 확장** — 「센서 몇 대까지?」의 답 · 프리셋 숫자의 뜻 · 실측 능력치 · **엣지란 무엇인가** · 확장 순서 |
 | [docs/spec-gaps.md](docs/spec-gaps.md) | **명세에 답이 없어서 내가 정한 것들** — 판단·근거·틀렸을 때의 파급 |
 
 ---
