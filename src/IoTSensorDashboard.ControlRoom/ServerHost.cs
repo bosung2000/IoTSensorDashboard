@@ -92,6 +92,10 @@ public sealed class ServerHost : IAsyncDisposable
 
     private long _messagesReceived;
     private long _droppedUnderLoad;
+
+    /// <summary>기동 시점의 저장소 행 수 — 이후로는 여기에 세션 저장분을 더해 쓴다.</summary>
+    private long _storedBaseline;
+
     private bool _disposed;
 
     public ServerHost(string? dbPath = null)
@@ -133,7 +137,22 @@ public sealed class ServerHost : IAsyncDisposable
 
     public MetricsSnapshot Metrics => _metrics.Snapshot();
 
-    public long TotalStored => _store.Count;
+    /// <summary>
+    /// 저장소에 든 총 이벤트 수(전체 기간).
+    ///
+    /// 🔴 <b>매번 세지 않는다 — 실측 결함.</b>
+    ///    <see cref="SqliteEventStore.Count"/> 는 <b>전체 스캔</b>이고 저장 워커와
+    ///    <b>같은 락</b>을 잡는다. 그런데 화면이 이 값을 매 틱 두 곳에서 읽고 있었고,
+    ///    관제실 창이 활성이면 틱이 33ms 라 <b>초당 60회 전체 스캔</b>이 됐다.
+    ///
+    /// 📌 실측(5,000/s · 900만 행): 창을 앞에 두는 것만으로 백로그가
+    ///    <b>1,036 → 7,148</b> 로 뛰었다. 세는 동안 저장이 막히기 때문이다.
+    ///    DB 가 클수록 나빠지므로 오래 돌리면 저장이 사실상 멈춘다.
+    ///
+    /// 🔑 그래서 <b>기동 시 1회만 세고 이후는 메모리 카운터로 증분</b>한다.
+    ///    (그 클래스의 주석이 처음부터 이걸 「호출 측 책임」이라고 명시하고 있었다.)
+    /// </summary>
+    public long TotalStored => Interlocked.Read(ref _storedBaseline) + _metrics.Snapshot().Appended;
 
     /// <summary>브로커가 실제로 리슨 중인가. 🔒 <b>매 틱 다시 물어야 한다.</b></summary>
     public bool BrokerRunning => _broker?.IsStarted ?? false;
@@ -162,6 +181,13 @@ public sealed class ServerHost : IAsyncDisposable
     public async Task StartAsync()
     {
         var ct = _cts.Token;
+
+        // ⓪ 저장소 기준점을 **딱 한 번** 센다.
+        //
+        // 🔒 Task.Run 인 이유: 이건 전체 스캔이라 큰 DB 에서 수백 ms 이상 걸린다.
+        //    UI 스레드에서 부르면 창이 그동안 안 뜬다.
+        //    이 뒤로는 아무도 Count 를 부르지 않는다(TotalStored 가 메모리로 답한다).
+        Interlocked.Exchange(ref _storedBaseline, await Task.Run(() => _store.Count, ct).ConfigureAwait(false));
 
         // ① 브로커를 먼저 띄운다 — 나머지가 붙을 곳이다.
         _broker = new EmbeddedMqttBroker(tlsCertificate: DevTls.CreateSelfSigned());
