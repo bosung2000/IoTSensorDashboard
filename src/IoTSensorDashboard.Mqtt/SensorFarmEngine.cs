@@ -183,21 +183,49 @@ public sealed class SensorFarmEngine
     /// 오프라인 센서 것은 <b>버퍼에 쌓인다</b>(반환되지 않는다).
     /// </summary>
     /// <param name="readingCount">이번 틱에 관측할 건수. 발행 속도에서 계산해 넘긴다.</param>
-    public IReadOnlyList<SensorReading> Tick(DateTimeOffset now, int readingCount)
+    /// <param name="window">
+    /// 이 틱이 대표하는 시간 구간(직전 틱 이후 실제 경과). 관측 시각을 이 구간에 흩는다.
+    /// 0 이면 <see cref="TickInterval"/> 로 본다.
+    /// </param>
+    /// <remarks>
+    /// 🔴 <b>한 틱에 같은 센서를 두 번 세지 않는다 — 실측 결함.</b>
+    ///
+    /// 📌 무슨 일이 있었나: 부하가 크거나 디버거가 붙어 틱이 밀리면
+    ///    <paramref name="readingCount"/> 가 <b>센서 수를 넘는다</b>(속도 × 밀린 시간).
+    ///    그러면 커서가 명부를 한 바퀴 넘게 돌아 <b>같은 센서가 같은 시각으로</b> 다시 발행됐다.
+    ///    수신 측의 멱등 키는 <c>SensorId|밀리초|Direction</c> 이라 그건 <b>같은 이벤트</b>다.
+    ///    → I1 이 전부 중복으로 접었고, 화면에는 <b>「수신은 되는데 저장이 0」</b> 으로 나타났다.
+    ///    백로그도 안 쌓였다(버려진 게 아니라 접힌 것이라서) — 그래서 진단이 어려웠다.
+    ///
+    /// 🔑 물리적으로도 이게 맞다. 센서 1,000대가 한 순간에 각자 한 번 관측하는 것이 상한이고,
+    ///    <b>밀렸다고 해서 과거를 소급 생성할 수는 없다</b>. 실제 센서도 그렇게 하지 않는다.
+    ///    상한을 넘긴 몫은 버린다 — 그래서 실측 발행량이 목표보다 낮게 나오면
+    ///    그건 「못 따라가고 있다」는 <b>정직한 신호</b>다.
+    /// </remarks>
+    public IReadOnlyList<SensorReading> Tick(DateTimeOffset now, int readingCount, TimeSpan window = default)
     {
         if (readingCount <= 0 || _sensorIds.Length == 0) return [];
 
-        var toPublish = new List<SensorReading>(readingCount);
+        // 🔒 명부 한 바퀴가 물리적 상한이다.
+        int capped = Math.Min(readingCount, _sensorIds.Length);
+
+        // 관측 시각을 구간에 고르게 흩는다 — 1,000건이 전부 같은 밀리초에 일어날 수는 없다.
+        long spanTicks = (window > TimeSpan.Zero ? window : TickInterval).Ticks;
+
+        var toPublish = new List<SensorReading>(capped);
 
         lock (_gate)
         {
-            for (int k = 0; k < readingCount; k++)
+            for (int k = 0; k < capped; k++)
             {
                 int i = _cursor;
                 _cursor = (_cursor + 1) % _sensorIds.Length;
 
+                // k 가 클수록 now 에 가깝다(구간의 끝이 지금).
+                var at = now - TimeSpan.FromTicks(spanTicks * (capped - 1 - k) / capped);
+
                 var reading = new SensorReading(
-                    _sensorIds[i], _vendors[i], _siteIds[i], now,
+                    _sensorIds[i], _vendors[i], _siteIds[i], at,
                     In: _random.Next(0, MaxPeoplePerSecondPerSensor + 1),
                     Out: _random.Next(0, MaxPeoplePerSecondPerSensor + 1));
 

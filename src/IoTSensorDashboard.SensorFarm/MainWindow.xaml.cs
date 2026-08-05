@@ -169,7 +169,10 @@ public partial class MainWindow : Window
 
                 if (count > 0)
                 {
-                    var readings = _engine.Tick(now, count);
+                    // 🔑 이 틱이 대표하는 **실제 구간**을 넘긴다.
+                    //    엔진이 관측 시각을 그 구간에 흩어, 1,000건이 같은 밀리초에
+                    //    일어난 것으로 기록되지 않게 한다.
+                    var readings = _engine.Tick(now, count, TimeSpan.FromSeconds(elapsed));
                     PublishBatch(readings, ct);
                     RecordPulse(readings);
                 }

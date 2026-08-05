@@ -131,12 +131,10 @@ public sealed class PipelineView : RenderPanel
 
             ("저장", "append-only · 이벤트", CompactNumber.Format(s.SessionStored), HudPalette.Accent),
 
-            // 🔴 집계 노드에는 값을 넣지 않는다.
-            //    넣을 만한 카운터가 **메시지 단위**뿐이라, 이벤트 단위인 저장 옆에 놓으면
-            //    「저장 3,722 → 집계 1,862」가 되어 뒤 단계에서 절반이 사라진 것처럼 보인다.
-            //    한 메시지에 in·out 두 이벤트가 들어 있어 생기는 차이일 뿐인데도 그렇게 읽힌다.
-            //    단위가 다른 수를 흐름에 나란히 놓느니 **비워 두는 편**이 정직하다.
-            ("집계", "시간 버킷 (I3)", "", HudPalette.Accent),
+            // 🔑 중복은 **저장과 같은 단위(이벤트)**라 흐름에 나란히 놓아도 뜻이 통한다.
+            //    그리고 이 자리가 「왜 저장이 안 늘어나는가」에 답한다 —
+            //    수신은 느는데 저장이 멈추면 그 차이는 여기로 갔다.
+            ("중복 접음", "I1 · 이벤트", CompactNumber.Format(s.Duplicate), HudPalette.Warn),
 
             // 단위를 부제에 적는다 — 위 카드의 「수신」은 메시지, 여기는 이벤트다.
             ("대시보드", "실시간 · 이벤트/s", RateText.Format(s.StoreRate), HudPalette.In),

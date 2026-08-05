@@ -36,12 +36,21 @@ public sealed class SensorFarmEngineTests
     {
         var engine = NewEngine();
 
-        var readings = engine.Tick(T0, readingCount: 5);
+        var window = TimeSpan.FromMilliseconds(50);
+        var readings = engine.Tick(T0, readingCount: 5, window);
 
         Assert.Equal(5, readings.Count);
         Assert.All(readings, r =>
         {
-            Assert.Equal(T0, r.At);
+            // 🔴 예전에는 여기서 `Assert.Equal(T0, r.At)` 로 **모든 관측이 같은 시각**임을
+            //    고정하고 있었다. 그게 실제 결함의 원인이었다 —
+            //    틱이 밀려 같은 센서가 두 번 나오면 같은 시각이라 멱등 키가 겹쳐
+            //    수신 측이 전부 중복으로 접었다(「수신은 되는데 저장이 0」).
+            //
+            // 🔑 이제는 틱이 대표하는 **구간 안**에 흩어져야 한다.
+            //    수백 건이 같은 밀리초에 일어날 수는 없다.
+            Assert.True(r.At <= T0 && r.At >= T0 - window, $"구간 밖: {r.At}");
+
             Assert.False(string.IsNullOrEmpty(r.SensorId));
             Assert.False(string.IsNullOrEmpty(r.SiteId));
         });
@@ -67,7 +76,12 @@ public sealed class SensorFarmEngineTests
         var sensorId = SiteProvisioning.SensorIdFor(0);
 
         engine.SetOffline(sensorId, true);
-        var readings = engine.Tick(T0, readingCount: 3);
+
+        // 🔑 한 틱에는 센서당 한 번만 관측된다(명부 한 바퀴가 물리적 상한).
+        //    그래서 3건을 쌓으려면 **세 틱**이 필요하다.
+        var readings = engine.Tick(T0, readingCount: 1);
+        engine.Tick(T0.AddSeconds(1), readingCount: 1);
+        engine.Tick(T0.AddSeconds(2), readingCount: 1);
 
         Assert.Empty(readings);              // 침묵한다
         Assert.Equal(3, engine.BufferedCount);
@@ -106,7 +120,11 @@ public sealed class SensorFarmEngineTests
         var sensorId = SiteProvisioning.SensorIdFor(0);
 
         engine.SetOffline(sensorId, true);
-        engine.Tick(T0, 2);
+
+        // 센서 1대는 한 틱에 한 번만 관측된다 → 2건을 쌓으려면 두 틱.
+        engine.Tick(T0, 1);
+        engine.Tick(T0.AddSeconds(1), 1);
+
         engine.SetOffline(sensorId, false);
 
         Assert.Equal(2, engine.DrainBackfill(sensorId).Count);
