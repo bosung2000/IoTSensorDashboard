@@ -76,6 +76,23 @@ public partial class MainWindow : Window
 
     /// <summary>마지막으로 <b>실제 데이터</b>가 들어온 순간. 핑 응답은 여기 안 들어간다.</summary>
     private DateTimeOffset _lastDataAt = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// 헬스 집계 캐시 — <b>1초에 한 번만</b> 다시 센다.
+    ///
+    /// 🔴 <b>왜 캐시가 필요한가 — 실측 결함.</b>
+    ///    <see cref="SensorHealthTracker.Summary"/> 와 <see cref="SensorHealthTracker.NeverSeenIds"/> 는
+    ///    센서 1,000대를 <b>락을 쥔 채</b> 순회한다. 화면이 이걸 매 틱 <b>세 번</b> 불렀고,
+    ///    창이 활성이면 틱이 33ms 라 <b>초당 9만 회 순회</b>가 된다.
+    ///
+    /// 🔴 그 락은 수집 경로가 <b>이벤트마다</b> 잡는 것과 같다(<c>Observe</c>).
+    ///    초당 1만 이벤트 × 추적기 2개 = 2만 번의 락 요청과 정면으로 부딪힌다.
+    ///    화면을 그리느라 <b>수집이 굶는다</b> — 저장이 0 으로 떨어지는 경로가 이것이다.
+    ///
+    /// 📌 이 프로젝트에서 같은 부류가 세 번째다(센서 팜 타일이 프레임당 락 1,000회 → 화면 정지).
+    ///    「한 번은 무해한 호출」이 고빈도에서 흉기가 된다.
+    /// </summary>
+    private (int Online, int Total, int Sending, int NeverSeen) _healthCache;
     private bool _rateBaselineSet;
     private double _receiveRate;
     private double _storeRate;
@@ -237,6 +254,13 @@ public partial class MainWindow : Window
 
         _activity.Enqueue(_storeRate);
         while (_activity.Count > ActivityPoints) _activity.Dequeue();
+
+        // 🔒 헬스 집계도 **여기서만** 다시 센다(1초). 매 틱 세면 수집이 굶는다.
+        var now = DateTimeOffset.UtcNow;
+        var (online, _, total) = _host.Health.Summary(now, HealthPolicy.Offline);
+        var (sending, _, _) = _host.DataHealth.Summary(now, HealthPolicy.Offline);
+
+        _healthCache = (online, total, sending, _host.Health.NeverSeenIds().Count);
     }
 
     private void UpdatePipeline(MetricsSnapshot metrics)
@@ -245,10 +269,8 @@ public partial class MainWindow : Window
 
         NoteFeed(now, metrics, _receiveRate);
 
-        var (online, _, total) = _host.Health.Summary(DateTimeOffset.UtcNow, HealthPolicy.Offline);
-
-        // 🔑 같은 정책·같은 순간으로 잰다. 기준이 다르면 두 숫자를 나란히 놓을 수 없다.
-        var (sending, _, _) = _host.DataHealth.Summary(DateTimeOffset.UtcNow, HealthPolicy.Offline);
+        // 🔒 캐시를 쓴다 — 두 값이 **같은 순간**에 재어진 것이라 나란히 놓아도 뜻이 통한다.
+        var (online, total, sending, _) = _healthCache;
 
         var snapshot = new PipelineSnapshot
         {
@@ -374,8 +396,10 @@ public partial class MainWindow : Window
 
     private void UpdateHealthChip()
     {
-        var (online, offline, total) = _host.Health.Summary(DateTimeOffset.UtcNow, HealthPolicy.Offline);
-        int neverSeen = _host.Health.NeverSeenIds().Count;
+        // 🔒 캐시를 읽는다. 여기서 다시 세면 센서 1,000대를 락을 쥔 채 순회하게 되고,
+        //    그 락은 수집이 이벤트마다 잡는 것과 같아 저장이 굶는다(SampleRates 가 1초마다 갱신).
+        var (online, total, _, neverSeen) = _healthCache;
+        int offline = Math.Max(0, total - online);
 
         // 🔑 「온라인 N / 전체 M」 — M 은 **있어야 할 명부** 기준이다.
         //    비율만 보여주면 분모가 무엇인지 알 수 없고, 그러면 그 비율을 믿을 수 없다.

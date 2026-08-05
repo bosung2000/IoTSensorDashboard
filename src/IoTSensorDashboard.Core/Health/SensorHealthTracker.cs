@@ -72,17 +72,51 @@ public sealed class SensorHealthTracker
     /// <summary>이 센서의 지금 상태.</summary>
     public SensorStatus Status(string sensorId, DateTimeOffset now, HealthPolicy policy)
     {
-        lock (_gate)
-        {
-            if (!_lastSeen.TryGetValue(sensorId, out var last))
-                return SensorStatus.Unknown;   // 한 번도 본 적 없다
+        lock (_gate) return StatusLocked(sensorId, now, policy);
+    }
 
-            // 🔑 임계와 **정확히 같은** 시각은 Online 이다(<= 비교).
-            //    경계에서 깜빡이면 장애 알림이 무의미해진다.
-            return (now - last) <= policy.For(CadenceLocked(sensorId))
-                ? SensorStatus.Online
-                : SensorStatus.Offline;
-        }
+    /// <summary>
+    /// 여러 센서의 상태를 <b>락 한 번</b>으로 읽는다.
+    ///
+    /// 🔴 <b>왜 따로 있는가 — 실측 결함.</b>
+    ///    화면이 센서 1,000대를 돌며 <see cref="Status"/> 를 하나씩 불렀다.
+    ///    그건 <b>프레임당 락 1,000회</b>이고, 창이 활성이면 틱이 33ms 라
+    ///    <b>초당 3만 번</b>이 된다. 그 락은 수집이 <b>이벤트마다</b> 잡는 것과 같으므로
+    ///    (<see cref="Observe"/>) 화면을 그리느라 수집이 굶는다.
+    ///
+    /// 📌 이 프로젝트에서 같은 부류가 세 번째다(센서 팜 타일 → 화면 정지).
+    ///    <b>「한 번은 무해한 호출」이 고빈도에서 흉기가 된다.</b>
+    ///
+    /// 🔑 호출부가 결과 배열을 <b>재사용</b>하면 프레임당 할당도 0 이 된다.
+    /// </summary>
+    /// <param name="into">
+    /// 결과를 받을 배열. <paramref name="sensorIds"/> 와 <b>길이가 같아야</b> 한다.
+    /// </param>
+    public void StatusesInto(
+        IReadOnlyList<string> sensorIds, DateTimeOffset now, HealthPolicy policy, SensorStatus[] into)
+    {
+        ArgumentNullException.ThrowIfNull(sensorIds);
+        ArgumentNullException.ThrowIfNull(into);
+
+        if (into.Length < sensorIds.Count)
+            throw new ArgumentException("결과 배열이 센서 수보다 짧다.", nameof(into));
+
+        lock (_gate)
+            for (int i = 0; i < sensorIds.Count; i++)
+                into[i] = StatusLocked(sensorIds[i], now, policy);
+    }
+
+    /// <summary>호출부가 <c>_gate</c> 를 잡고 있어야 한다.</summary>
+    private SensorStatus StatusLocked(string sensorId, DateTimeOffset now, HealthPolicy policy)
+    {
+        if (!_lastSeen.TryGetValue(sensorId, out var last))
+            return SensorStatus.Unknown;   // 한 번도 본 적 없다
+
+        // 🔑 임계와 **정확히 같은** 시각은 Online 이다(<= 비교).
+        //    경계에서 깜빡이면 장애 알림이 무의미해진다.
+        return (now - last) <= policy.For(CadenceLocked(sensorId))
+            ? SensorStatus.Online
+            : SensorStatus.Offline;
     }
 
     /// <summary>

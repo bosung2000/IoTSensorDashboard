@@ -108,6 +108,14 @@ public sealed class DashboardModel : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private MqttIngestionSource? _ingest;
 
+    /// <summary>
+    /// 센서 상태를 한 번에 받아 두는 버퍼 — <b>프레임마다 재사용</b>한다.
+    ///
+    /// 🔑 매 프레임 새로 만들면 1,000칸 배열이 초당 30개씩 쌓인다.
+    ///    화면 갱신 경로에서의 할당은 그 자체가 부하다.
+    /// </summary>
+    private SensorStatus[] _statusBuffer = [];
+
     private long _events;
     private FeedMode _mode = FeedMode.Connecting;
     private int _prevOnline = -1;
@@ -285,6 +293,14 @@ public sealed class DashboardModel : IAsyncDisposable
         bool sample = elapsed >= TrendIntervalSeconds;
         if (sample) _sinceSample.Restart();
 
+        // 🔴 센서 상태를 **락 한 번**으로 통째로 받아 온다.
+        //    하나씩 물으면 프레임당 락 1,000회가 되고, 그 락은 수집이 이벤트마다
+        //    잡는 것과 같아 화면을 그리느라 수집이 굶는다(실측으로 확인한 부류).
+        var sensors = _provisioning.Sensors;
+        if (_statusBuffer.Length < sensors.Count) _statusBuffer = new SensorStatus[sensors.Count];
+
+        _health.StatusesInto(_provisioning.SensorIds, now, HealthPolicy.Offline, _statusBuffer);
+
         lock (_gate)
         {
             var stores = new List<StoreStat>();
@@ -300,16 +316,18 @@ public sealed class DashboardModel : IAsyncDisposable
                 int total = 0;
                 int unknown = 0;
 
-                foreach (var sensor in _provisioning.Sensors)
+                // 🔒 위에서 받아 둔 버퍼를 읽는다 — 여기서 추적기를 다시 부르지 않는다.
+                //    SensorIds 와 Sensors 는 같은 순서로 만들어지므로 인덱스가 대응한다.
+                for (int i = 0; i < sensors.Count; i++)
                 {
-                    if (!string.Equals(sensor.SiteId, siteId, StringComparison.Ordinal)) continue;
+                    if (!string.Equals(sensors[i].SiteId, siteId, StringComparison.Ordinal)) continue;
 
                     total++;   // 🔑 「있어야 할 수」가 분모다
 
                     // 🔴 Online 이 아닌 것을 전부 「오프라인」으로 뭉치지 않는다.
                     //    한 번도 못 본 것(Unknown)은 장애가 아니라 **미관측**이고,
                     //    원인도 처리도 다르다(설치·배선·명부 ↔ 장애 조치).
-                    switch (_health.Status(sensor.Id, now, HealthPolicy.Offline))
+                    switch (_statusBuffer[i])
                     {
                         case SensorStatus.Online: online++; break;
                         case SensorStatus.Unknown: unknown++; break;
